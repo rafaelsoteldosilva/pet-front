@@ -1,0 +1,158 @@
+/* src/app/globals.css */
+
+@import "tailwindcss";
+
+/* REQUIRED for full-height layouts */
+html,
+body {
+    height: 100%;
+    margin: 0;
+}
+
+/* Do NOT paint a background here */
+body {
+    color: #171717;
+    font-family: Arial, Helvetica, sans-serif;
+}
+
+/* ================================
+   AG GRID – FILTER BUTTONS (BLUE)
+   ================================ */
+
+.ag-theme-quartz .ag-filter-apply-panel {
+    display: flex;
+    gap: 8px;
+}
+
+/* APLICAR */
+.ag-theme-quartz .ag-filter-apply-panel button.ag-standard-button:first-child {
+    background-color: #2563eb; /* blue-600 */
+    color: #ffffff;
+    border-radius: 6px;
+    padding: 6px 14px;
+    font-weight: 500;
+    border: none;
+}
+
+.ag-theme-quartz
+    .ag-filter-apply-panel
+    button.ag-standard-button:first-child:hover {
+    background-color: #1d4ed8; /* blue-700 */
+}
+
+/* LIMPIAR */
+.ag-theme-quartz .ag-filter-apply-panel button.ag-standard-button:last-child {
+    background-color: #e5e7eb; /* gray-200 */
+    color: #374151; /* gray-700 */
+    border-radius: 6px;
+    padding: 6px 14px;
+    font-weight: 500;
+    border: none;
+}
+
+.ag-theme-quartz
+    .ag-filter-apply-panel
+    button.ag-standard-button:last-child:hover {
+    background-color: #d1d5db;
+}
+
+.ag-cell-center-no-padding {
+    display: flex;
+    align-items: center; /* 👈 CENTRADO VERTICAL */
+    justify-content: center; /* 👈 CENTRADO HORIZONTAL */
+    padding: 0 !important;
+}
+
+/* Centra vertical y horizontalmente el contenido del cell */
+.ag-cell-center-no-padding {
+    padding: 0 !important;
+}
+
+.ag-cell-center-no-padding .ag-cell-wrapper {
+    display: flex;
+    align-items: center; /* 👈 vertical */
+    justify-content: center; /* 👈 horizontal */
+    height: 100%;
+}
+
+/* Asegura que el checkbox no empuje hacia arriba */
+.ag-cell-center-no-padding .ag-selection-checkbox {
+    margin: 0;
+    display: flex;
+    align-items: center;
+}
+
+/* ================================
+   AG GRID QUARTZ – CENTER CHECKBOX
+   ================================ */
+
+.ag-theme-quartz .ag-cell-center-no-padding {
+    padding: 0 !important;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.ag-theme-quartz .ag-cell-center-no-padding .ag-cell-value {
+    display: flex;
+    align-items: center; /* 👈 CLAVE */
+    justify-content: center;
+    height: 100%;
+    line-height: normal; /* 👈 CLAVE */
+}
+
+.ag-theme-quartz .ag-cell-center-no-padding .ag-selection-checkbox {
+    display: flex;
+    align-items: center;
+    margin: 0;
+}
+
+.ag-theme-quartz .ag-header-cell,
+.ag-theme-quartz .ag-header-cell-label {
+    pointer-events: auto;
+}
+
+@keyframes scaleIn {
+    0% {
+        transform: scale(0.97);
+        opacity: 0;
+    }
+    100% {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+.animate-scaleIn {
+    animation: scaleIn 0.15s ease-out forwards;
+}
+
+@keyframes modalIn {
+    from {
+        opacity: 0;
+        transform: scale(0.96) translateY(8px);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+.input {
+    width: 100%;
+    border: 1px solid #cbd5e1;
+    background: #f8fafc;
+    padding: 8px 10px;
+    border-radius: 8px;
+    font-size: 14px;
+}
+
+.input:focus {
+    outline: none;
+    border-color: #3b82f6;
+    background: white;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
+}
+
+.textarea {
+    min-height: 80px;
+}
