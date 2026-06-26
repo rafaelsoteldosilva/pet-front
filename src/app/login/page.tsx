@@ -19,6 +19,10 @@ import {
 
 import {login} from "@/shared/auth/authService";
 import GlobalButton from "@/shared/ui/globalButton";
+import {
+    getRegisteredCentersForLoginApi,
+    LoginAvailableCenterInterface,
+} from "@/api/auth/getRegisteredCentersForLoginApi";
 
 type UserCenterOption = {
     id: number;
@@ -31,20 +35,14 @@ type GetRegisteredCentersForLoginRequest = {
     password: string;
 };
 
-async function getRegisteredCentersForLogin({
-    email,
-    password,
-}: GetRegisteredCentersForLoginRequest): Promise<UserCenterOption[]> {
-    void email;
-    void password;
-
-    return [
-        {
-            id: 1,
-            name: "Clínica Veterinaria San Rafael",
-            role: "VETERINARIAN",
-        },
-    ];
+async function getRegisteredCentersForLogin(
+    email: string,
+    password: string,
+): Promise<LoginAvailableCenterInterface[]> {
+    return getRegisteredCentersForLoginApi({
+        email,
+        password,
+    });
 }
 
 export default function LoginPage() {
@@ -127,8 +125,8 @@ export default function LoginPage() {
         setIsCheckingUserCenters(true);
 
         try {
-            const centers = await getRegisteredCentersForLogin({
-                email: trimmedEmail,
+            const centers = await getRegisteredCentersForLoginApi({
+                email,
                 password,
             });
 
@@ -490,23 +488,23 @@ export default function LoginPage() {
                         type="button"
                         variant="primary"
                         size="md"
-                        onClick={handleLoginWithSelectedCenter}
-                        isLoading={isLoggingIn}
-                        loadingText="Ingresando..."
-                        disabled={isLoggingIn || !selectedCenter}
+                        onClick={handleCloseCenterDialog}
+                        disabled={isLoggingIn}
+                        className="!bg-red-600 hover:!bg-red-700"
                     >
-                        OK
+                        Cancelar
                     </GlobalButton>
 
                     <GlobalButton
                         type="button"
                         variant="primary"
                         size="md"
-                        onClick={handleCloseCenterDialog}
-                        disabled={isLoggingIn}
-                        className="!bg-red-600 hover:!bg-red-700"
+                        onClick={handleLoginWithSelectedCenter}
+                        isLoading={isLoggingIn}
+                        loadingText="Ingresando..."
+                        disabled={isLoggingIn || !selectedCenter}
                     >
-                        Cancelar
+                        OK
                     </GlobalButton>
                 </DialogActions>
             </Dialog>
@@ -605,23 +603,22 @@ export default function LoginPage() {
                         type="button"
                         variant="primary"
                         size="md"
+                        onClick={handleCloseCenterDialog}
+                        disabled={isLoggingIn}
+                        className="!bg-red-600 hover:!bg-red-700"
+                    >
+                        Cancelar
+                    </GlobalButton>
+                    <GlobalButton
+                        type="button"
+                        variant="primary"
+                        size="md"
                         onClick={handleLoginWithSelectedCenter}
                         isLoading={isLoggingIn}
                         loadingText="Ingresando..."
                         disabled={isLoggingIn || !selectedCenter}
                     >
                         OK
-                    </GlobalButton>
-
-                    <GlobalButton
-                        type="button"
-                        variant="primary"
-                        size="md"
-                        onClick={handleCloseCenterDialog}
-                        disabled={isLoggingIn}
-                        className="!bg-red-600 hover:!bg-red-700"
-                    >
-                        Cancelar
                     </GlobalButton>
                 </DialogActions>
             </Dialog>
