@@ -3,30 +3,46 @@
 "use client";
 
 import {useState} from "react";
+import {useRouter} from "next/navigation";
+import {FiPower} from "react-icons/fi";
 
+import GlobalButton from "@/shared/ui/globalButton";
 import {logout} from "@/shared/auth/authService";
 
 export default function LogoutButton() {
+    const router = useRouter();
     const [isLoggingOut, setIsLoggingOut] = useState(false);
 
-    async function handleLogout() {
+    const handleLogout = async () => {
         if (isLoggingOut) {
             return;
         }
 
-        setIsLoggingOut(true);
+        try {
+            setIsLoggingOut(true);
 
-        await logout();
-    }
+            await Promise.resolve(logout());
+
+            router.replace("/login");
+        } finally {
+            setIsLoggingOut(false);
+        }
+    };
 
     return (
-        <button
+        <GlobalButton
             type="button"
+            variant="softDanger"
+            size="sm"
+            isLoading={isLoggingOut}
+            loadingText="Cerrando..."
+            leftIcon={<FiPower className="h-4 w-4" aria-hidden="true" />}
             onClick={handleLogout}
-            disabled={isLoggingOut}
-            className="w-full rounded-md px-3 py-2 text-left text-sm text-slate-200 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
+            className="whitespace-nowrap"
+            title="Cerrar Sesión"
+            aria-label="Cerrar Sesión"
         >
-            {isLoggingOut ? "Cerrando sesión..." : "Cerrar sesión"}
-        </button>
+            Cerrar Sesión
+        </GlobalButton>
     );
 }

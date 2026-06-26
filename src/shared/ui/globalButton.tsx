@@ -6,7 +6,13 @@ import type {ButtonHTMLAttributes, MouseEventHandler, ReactNode} from "react";
 
 import clsx from "clsx";
 
-type ButtonVariant = "primary" | "secondary" | "danger" | "ghost" | "outline";
+type ButtonVariant =
+    | "primary"
+    | "secondary"
+    | "danger"
+    | "softDanger"
+    | "ghost"
+    | "outline";
 
 type ButtonSize = "xs" | "sm" | "md" | "lg" | "icon";
 
@@ -66,17 +72,24 @@ export default function GlobalButton({
                 )
               : variant === "danger"
                 ? clsx("bg-red-600 text-white", hoverEffect, activeEffect)
-                : variant === "outline"
+                : variant === "softDanger"
                   ? clsx(
-                        "border border-slate-300 bg-white text-slate-700",
+                        "border border-red-200 bg-red-50 text-red-700",
+                        "hover:bg-red-100 hover:text-red-800",
                         hoverEffect,
                         activeEffect,
                     )
-                  : clsx(
-                        "bg-transparent text-slate-600 hover:bg-slate-100",
-                        hoverEffect,
-                        activeEffect,
-                    );
+                  : variant === "outline"
+                    ? clsx(
+                          "border border-slate-300 bg-white text-slate-700",
+                          hoverEffect,
+                          activeEffect,
+                      )
+                    : clsx(
+                          "bg-transparent text-slate-600 hover:bg-slate-100",
+                          hoverEffect,
+                          activeEffect,
+                      );
 
     /* ======================================================
        Disabled

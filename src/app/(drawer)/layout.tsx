@@ -51,25 +51,25 @@ function AuthenticatedDrawerLayout({children}: DrawerLayoutProps) {
                         onToggle={() => setCollapsed((c) => !c)}
                     />
                 </div>
-
-                {!collapsed && (
-                    <div className="border-t border-white/10 p-3">
-                        <LogoutButton />
-                    </div>
-                )}
             </aside>
 
             <main className="relative flex-1 min-w-0 overflow-y-auto">
                 <AppBackground variant="dashboard" />
 
                 <div className="relative z-10 px-6 py-6 space-y-4 w-full min-w-0">
-                    <header>
-                        <h1 className="text-3xl font-semibold text-slate-800">
-                            Espacio reservado por mí
-                        </h1>
+                    <header className="flex items-start justify-between gap-4">
+                        <div className="min-w-0">
+                            <h1 className="text-3xl font-semibold text-slate-800">
+                                Espacio reservado por mí
+                            </h1>
 
-                        <div className="mt-2">
-                            <Breadcrumb items={breadcrumb} />
+                            <div className="mt-2">
+                                <Breadcrumb items={breadcrumb} />
+                            </div>
+                        </div>
+
+                        <div className="shrink-0 pt-1">
+                            <LogoutButton />
                         </div>
                     </header>
 
