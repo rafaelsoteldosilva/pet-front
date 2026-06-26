@@ -28,6 +28,7 @@ type UserCenterOption = {
     id: number;
     name: string;
     role?: string | null;
+    role_label?: string | null;
 };
 
 type GetRegisteredCentersForLoginRequest = {
@@ -459,7 +460,9 @@ export default function LoginPage() {
                                         value={String(center.id)}
                                     >
                                         {center.name}
-                                        {center.role ? ` · ${center.role}` : ""}
+                                        {center.role_label
+                                            ? ` · ${center.role_label}`
+                                            : ""}
                                     </MenuItem>
                                 ))}
                             </TextField>
@@ -573,8 +576,8 @@ export default function LoginPage() {
                                             value={String(center.id)}
                                         >
                                             {center.name}
-                                            {center.role
-                                                ? ` · ${center.role}`
+                                            {center.role_label
+                                                ? ` · ${center.role_label}`
                                                 : ""}
                                         </MenuItem>
                                     ))}
