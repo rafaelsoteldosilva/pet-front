@@ -167,6 +167,23 @@ const globalSidebarMenuItems: SidebarItemsConfig[] = [
         itemTooltip: "",
     },
     {
+        itemId: "globalSidebar_campañas",
+        itemLabel: "Campañas",
+        itemIcon: HiOutlineClipboardCheck,
+        itemAction: {
+            type: "go_to_section",
+            menuId: "campaña",
+        },
+        itemPath: "/campañas",
+        itemDisabled: false,
+        itemTextColor: "text-slate-300",
+        itemBold: false,
+        itemUnderline: false,
+        itemTopBorder: false,
+        itemBottomBorder: false,
+        itemTooltip: "",
+    },
+    {
         itemId: "globalSidebar_tareas",
         itemLabel: "Tareas",
         itemIcon: HiOutlineClipboardCheck,

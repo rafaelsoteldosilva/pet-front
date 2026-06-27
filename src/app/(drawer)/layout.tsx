@@ -59,8 +59,10 @@ function AuthenticatedDrawerLayout({children}: DrawerLayoutProps) {
                 <div className="relative z-10 px-6 py-6 space-y-4 w-full min-w-0">
                     <header className="flex items-start justify-between gap-4">
                         <div className="min-w-0">
-                            <h1 className="text-3xl font-semibold text-slate-800">
-                                Espacio reservado por mí
+                            <h1 className="text-2xl font-semibold text-slate-800">
+                                In this space I'll show the user name and photo,
+                                the user's role, the Veterinary Center logo,
+                                etc..
                             </h1>
 
                             <div className="mt-2">
