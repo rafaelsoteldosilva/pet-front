@@ -13,7 +13,7 @@ import {
 } from "@/state/redux/slices/centerVetsSlice";
 
 type Params = {
-    centerId: number;
+    centerId: number | null;
 };
 
 type LoadCenterVetsOptions = {
@@ -22,10 +22,6 @@ type LoadCenterVetsOptions = {
 
 export function useCenterVetsSlice({centerId}: Params) {
     const dispatch = useDispatch<reduxDispatch>();
-
-    // --------------------
-    // Redux selectors
-    // --------------------
 
     const centerVets = useSelector(
         (state: reduxState) => state.centerVets.vets,
@@ -43,12 +39,12 @@ export function useCenterVetsSlice({centerId}: Params) {
         (state: reduxState) => state.centerVets.loadedCenterId,
     );
 
-    // --------------------
-    // Actions
-    // --------------------
-
     const loadCenterVetsSlice = useCallback(
         (options?: LoadCenterVetsOptions) => {
+            if (centerId === null) {
+                return;
+            }
+
             const forceRefresh = options?.forceRefresh ?? false;
 
             if (!forceRefresh && loadedCenterId === centerId) {
@@ -68,18 +64,11 @@ export function useCenterVetsSlice({centerId}: Params) {
         dispatch(clearCenterVets());
     }, [dispatch]);
 
-    // --------------------
-    // Public API
-    // --------------------
-
     return {
-        // data
         centerVets,
         centerVetsLoading,
         centerVetsError,
         loadedCenterId,
-
-        // actions
         loadCenterVetsSlice,
         clearCenterVetsSlice,
     };

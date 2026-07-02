@@ -23,7 +23,7 @@ export default function Patient_Management_BasicDataOfAPatient() {
     const {setMenuWithMenuId} = useSidebarContext();
     const centerId = 1;
 
-    const {pet, loading, loadPetDataSlice} = usePetDataSlice();
+    const {pet, petLoading, loadPetDataSlice} = usePetDataSlice();
 
     const [openSelector, setOpenSelector] = useState(false);
     const [openConfirmUsePet, setOpenConfirmUsePet] = useState(false);
@@ -37,7 +37,7 @@ export default function Patient_Management_BasicDataOfAPatient() {
     }, [setMenuWithMenuId]);
 
     useEffect(() => {
-        if (loading) return;
+        if (petLoading) return;
         if (hasHandledInitialEntry.current) return;
 
         hasHandledInitialEntry.current = true;
@@ -47,7 +47,7 @@ export default function Patient_Management_BasicDataOfAPatient() {
         } else {
             setOpenSelector(true);
         }
-    }, [loading, pet]);
+    }, [petLoading, pet]);
 
     const handlePetSelected = async (
         selectedPet: GetAllPetsForCenterResult,

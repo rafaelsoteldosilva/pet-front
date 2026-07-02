@@ -300,14 +300,14 @@ const dataManagementMenuItems: SidebarItemsConfig[] = [
         itemTooltip: "contactsData",
     },
     {
-        itemId: "gestion_datos_registrar_paciente",
+        itemId: "gestion_datos_registrar_nuevo_paciente",
         itemLabel: "Registrar Nuevo Paciente",
         itemIcon: HiOutlineClipboardList,
         itemAction: {
             type: "go_to_component",
-            path: "/gestion_datos/registrar_paciente",
+            path: "/gestion_datos/registrar_nuevo_paciente",
         },
-        itemPath: "/gestion_datos/registrar_paciente",
+        itemPath: "/gestion_datos/registrar_nuevo_paciente",
         itemDisabled: false,
         itemTextColor: "text-slate-300",
         itemBold: false,

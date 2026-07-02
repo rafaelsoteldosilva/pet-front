@@ -14,13 +14,13 @@ import {
 export function useAllowedSpeciesAndBreedsSlice() {
     const dispatch = useDispatch<reduxDispatch>();
 
-    const results = useSelector(
+    const speciesAndBreedsResults = useSelector(
         (state: reduxState) => state.allowedSpeciesAndBreeds.results,
     );
-    const loading = useSelector(
+    const speciesAndBreedsLoading = useSelector(
         (state: reduxState) => state.allowedSpeciesAndBreeds.loading,
     );
-    const error = useSelector(
+    const speciesAndBreedsError = useSelector(
         (state: reduxState) => state.allowedSpeciesAndBreeds.error,
     );
     const loadedCenterId = useSelector(
@@ -42,9 +42,9 @@ export function useAllowedSpeciesAndBreedsSlice() {
     }, [dispatch]);
 
     return {
-        results,
-        loading,
-        error,
+        speciesAndBreedsResults,
+        speciesAndBreedsLoading,
+        speciesAndBreedsError,
         loadedCenterId,
         loadAllowedSpeciesAndBreedsSlice,
         clearAllowedSpeciesAndBreedsSlice,
