@@ -679,6 +679,13 @@ export default function PetDataView({
                         }
                         onEdit={editLastWeight}
                     />
+
+                    <Row
+                        label="Referencia"
+                        value={pet.reference ?? "—"}
+                        onEdit={editReference}
+                        colSpan={4}
+                    />
                 </Section>
 
                 <Section title="Identificación">
@@ -690,15 +697,10 @@ export default function PetDataView({
                     />
 
                     <Row
-                        label="Referencia"
-                        value={pet.reference ?? "—"}
-                        onEdit={editReference}
-                    />
-
-                    <Row
                         label="Placa, collar, etiqueta"
                         value={pet.visual_tag ?? "—"}
                         onEdit={editVisualTag}
+                        colSpan={2}
                     />
 
                     <Row
