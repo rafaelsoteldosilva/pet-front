@@ -11,6 +11,73 @@ import FormCard from "@/shared/ui/forms/formCard";
 import FormDialog from "@/shared/ui/forms/formDialog";
 
 /* ======================================================
+   HELPERS USED BY SCHEMA
+   ====================================================== */
+
+function isValidDateOnly(value: string): boolean {
+    const normalizedValue = value.trim();
+
+    if (!normalizedValue) {
+        return true;
+    }
+
+    const parts = normalizedValue.split("-");
+
+    if (parts.length !== 3) {
+        return false;
+    }
+
+    const year = Number(parts[0]);
+    const month = Number(parts[1]);
+    const day = Number(parts[2]);
+
+    if (
+        !Number.isInteger(year) ||
+        !Number.isInteger(month) ||
+        !Number.isInteger(day)
+    ) {
+        return false;
+    }
+
+    if (year < 1 || month < 1 || month > 12 || day < 1 || day > 31) {
+        return false;
+    }
+
+    const date = new Date(year, month - 1, day);
+
+    return (
+        date.getFullYear() === year &&
+        date.getMonth() === month - 1 &&
+        date.getDate() === day
+    );
+}
+
+function isFutureDateOnly(value: string): boolean {
+    const normalizedValue = value.trim();
+
+    if (!normalizedValue || !isValidDateOnly(normalizedValue)) {
+        return false;
+    }
+
+    const [yearText, monthText, dayText] = normalizedValue.split("-");
+
+    const selectedDate = new Date(
+        Number(yearText),
+        Number(monthText) - 1,
+        Number(dayText),
+    );
+
+    const today = new Date();
+    const todayDateOnly = new Date(
+        today.getFullYear(),
+        today.getMonth(),
+        today.getDate(),
+    );
+
+    return selectedDate > todayDateOnly;
+}
+
+/* ======================================================
    SINGLE SOURCE OF TRUTH
    ====================================================== */
 
@@ -28,24 +95,22 @@ const addNewPetSchema = z
         species_id: z.string().min(1, "La especie es obligatoria."),
         breed_id: z.string().optional(),
 
-        sterilized: z.boolean(),
-
         birth_date: z.string().optional(),
 
-        body_description: z.string().optional(),
+        sterilized: z.boolean(),
+
         size: z.string().optional(),
         last_weight: z.string().optional(),
 
-        last_attending_vet_id: z.string().optional(),
-
+        body_description: z.string().optional(),
         reference: z.string().optional(),
+
+        visual_tag: z.string().optional(),
+        has_visual_identification: z.boolean(),
+        visual_identification_or_tattoo_description: z.string().optional(),
 
         has_pedigree: z.boolean(),
         pedigree_registry: z.string().optional(),
-
-        has_visual_identification: z.boolean(),
-        visual_tag: z.string().optional(),
-        visual_identification_or_tattoo_description: z.string().optional(),
 
         has_microchip: z.boolean(),
         microchip_code: z.string().optional(),
@@ -55,16 +120,26 @@ const addNewPetSchema = z
         clinical_observations: z.string().optional(),
         internal_notes: z.string().optional(),
 
+        last_attending_vet_id: z.string().optional(),
+
         photo_url: z.string().optional(),
     })
     .superRefine((data, ctx) => {
-        const microchipCode = data.microchip_code?.trim();
+        const birthDate = data.birth_date?.trim() ?? "";
 
-        if (microchipCode && !/^\d{15}$/.test(microchipCode)) {
+        if (birthDate && !isValidDateOnly(birthDate)) {
             ctx.addIssue({
                 code: z.ZodIssueCode.custom,
-                path: ["microchip_code"],
-                message: "El microchip debe tener 15 dígitos.",
+                path: ["birth_date"],
+                message: "La fecha de nacimiento no es válida.",
+            });
+        }
+
+        if (birthDate && isFutureDateOnly(birthDate)) {
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                path: ["birth_date"],
+                message: "La fecha de nacimiento no puede ser futura.",
             });
         }
 
@@ -75,6 +150,70 @@ const addNewPetSchema = z
                 code: z.ZodIssueCode.custom,
                 path: ["last_weight"],
                 message: "El peso debe ser un número válido.",
+            });
+        }
+
+        const microchipCode = data.microchip_code?.trim();
+
+        if (
+            data.has_microchip &&
+            microchipCode &&
+            !/^\d{15}$/.test(microchipCode)
+        ) {
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                path: ["microchip_code"],
+                message: "El microchip debe tener 15 dígitos.",
+            });
+        }
+
+        const microchipDate = data.microchip_date?.trim() ?? "";
+
+        if (
+            data.has_microchip &&
+            microchipDate &&
+            !isValidDateOnly(microchipDate)
+        ) {
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                path: ["microchip_date"],
+                message: "La fecha de implantación no es válida.",
+            });
+        }
+
+        if (
+            data.has_microchip &&
+            microchipDate &&
+            isFutureDateOnly(microchipDate)
+        ) {
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                path: ["microchip_date"],
+                message: "La fecha de implantación no puede ser futura.",
+            });
+        }
+
+        const pedigreeRegistry = data.pedigree_registry?.trim();
+
+        if (!data.has_pedigree && pedigreeRegistry) {
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                path: ["pedigree_registry"],
+                message: "Activa Pedigrí antes de ingresar un registro.",
+            });
+        }
+
+        const hasAnyMicrochipData =
+            Boolean(data.microchip_code?.trim()) ||
+            Boolean(data.microchip_date?.trim()) ||
+            Boolean(data.microchip_body_region?.trim());
+
+        if (!data.has_microchip && hasAnyMicrochipData) {
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                path: ["has_microchip"],
+                message:
+                    "Activa Microchip antes de ingresar código, fecha o ubicación corporal.",
             });
         }
     });
@@ -157,23 +296,22 @@ const defaultValues: AddNewPetFormValues = {
     species_id: "",
     breed_id: "",
 
-    sterilized: false,
     birth_date: "",
 
-    body_description: "",
+    sterilized: false,
+
     size: "",
     last_weight: "",
 
-    last_attending_vet_id: "",
-
+    body_description: "",
     reference: "",
+
+    visual_tag: "",
+    has_visual_identification: false,
+    visual_identification_or_tattoo_description: "",
 
     has_pedigree: false,
     pedigree_registry: "",
-
-    has_visual_identification: false,
-    visual_tag: "",
-    visual_identification_or_tattoo_description: "",
 
     has_microchip: false,
     microchip_code: "",
@@ -183,11 +321,13 @@ const defaultValues: AddNewPetFormValues = {
     clinical_observations: "",
     internal_notes: "",
 
+    last_attending_vet_id: "",
+
     photo_url: "",
 };
 
 /* ======================================================
-   HELPERS
+   NORMALIZATION HELPERS
    ====================================================== */
 
 function emptyToNull(value: string | undefined): string | null {
@@ -195,8 +335,29 @@ function emptyToNull(value: string | undefined): string | null {
     return normalized ? normalized : null;
 }
 
+function normalizeDateValue(value: unknown): string {
+    if (value === null || value === undefined) {
+        return "";
+    }
+
+    const text = String(value).trim();
+
+    if (!text) {
+        return "";
+    }
+
+    return text.slice(0, 10);
+}
+
+function dateToNull(value: string | undefined): string | null {
+    const normalized = normalizeDateValue(value);
+    return normalized ? normalized : null;
+}
+
 function stringIdToNumberOrNull(value: string | undefined): number | null {
-    if (!value) return null;
+    if (!value) {
+        return null;
+    }
 
     const parsedValue = Number(value);
 
@@ -223,7 +384,103 @@ function stringNumberToNumberOrNull(value: string | undefined): number | null {
     return parsedValue;
 }
 
+function parseDateOnly(value: string): Date | null {
+    const normalizedValue = normalizeDateValue(value);
+
+    if (!normalizedValue) {
+        return null;
+    }
+
+    const parts = normalizedValue.split("-");
+
+    if (parts.length !== 3) {
+        return null;
+    }
+
+    const year = Number(parts[0]);
+    const month = Number(parts[1]);
+    const day = Number(parts[2]);
+
+    if (
+        !Number.isInteger(year) ||
+        !Number.isInteger(month) ||
+        !Number.isInteger(day)
+    ) {
+        return null;
+    }
+
+    if (year < 1 || month < 1 || month > 12 || day < 1 || day > 31) {
+        return null;
+    }
+
+    const date = new Date(year, month - 1, day);
+
+    if (
+        date.getFullYear() !== year ||
+        date.getMonth() !== month - 1 ||
+        date.getDate() !== day
+    ) {
+        return null;
+    }
+
+    return date;
+}
+
+function formatPetAgeFromBirthDate(
+    birthDateValue: string,
+    emptyText: string,
+): string {
+    const birthDate = parseDateOnly(birthDateValue);
+
+    if (!birthDate) {
+        return emptyText;
+    }
+
+    const today = new Date();
+    const todayDateOnly = new Date(
+        today.getFullYear(),
+        today.getMonth(),
+        today.getDate(),
+    );
+
+    if (birthDate > todayDateOnly) {
+        return "La fecha está en el futuro.";
+    }
+
+    let years = todayDateOnly.getFullYear() - birthDate.getFullYear();
+    let months = todayDateOnly.getMonth() - birthDate.getMonth();
+
+    if (todayDateOnly.getDate() < birthDate.getDate()) {
+        months -= 1;
+    }
+
+    if (months < 0) {
+        years -= 1;
+        months += 12;
+    }
+
+    if (years < 0) {
+        return "La fecha está en el futuro.";
+    }
+
+    const yearsText = `${years} año${years === 1 ? "" : "s"}`;
+    const monthsText = `${months} mes${months === 1 ? "" : "es"}`;
+
+    return `${yearsText} y ${monthsText}`;
+}
+
 function normalizeBeforeSave(data: AddNewPetFormValues): AddNewPetPayload {
+    const visualTag = emptyToNull(data.visual_tag);
+
+    const visualIdentificationOrTattooDescription = emptyToNull(
+        data.visual_identification_or_tattoo_description,
+    );
+
+    const hasVisualIdentification =
+        data.has_visual_identification ||
+        visualTag !== null ||
+        visualIdentificationOrTattooDescription !== null;
+
     return {
         name: data.name.trim(),
         sex: data.sex,
@@ -232,7 +489,7 @@ function normalizeBeforeSave(data: AddNewPetFormValues): AddNewPetPayload {
         breed_id: stringIdToNumberOrNull(data.breed_id),
 
         sterilized: data.sterilized,
-        birth_date: emptyToNull(data.birth_date),
+        birth_date: dateToNull(data.birth_date),
 
         body_description: emptyToNull(data.body_description),
         size: emptyToNull(data.size),
@@ -245,18 +502,25 @@ function normalizeBeforeSave(data: AddNewPetFormValues): AddNewPetPayload {
         reference: emptyToNull(data.reference),
 
         has_pedigree: data.has_pedigree,
-        pedigree_registry: emptyToNull(data.pedigree_registry),
+        pedigree_registry: data.has_pedigree
+            ? emptyToNull(data.pedigree_registry)
+            : null,
 
-        has_visual_identification: data.has_visual_identification,
-        visual_tag: emptyToNull(data.visual_tag),
-        visual_identification_or_tattoo_description: emptyToNull(
-            data.visual_identification_or_tattoo_description,
-        ),
+        has_visual_identification: hasVisualIdentification,
+        visual_tag: visualTag,
+        visual_identification_or_tattoo_description:
+            visualIdentificationOrTattooDescription,
 
         has_microchip: data.has_microchip,
-        microchip_code: emptyToNull(data.microchip_code),
-        microchip_date: emptyToNull(data.microchip_date),
-        microchip_body_region: emptyToNull(data.microchip_body_region),
+        microchip_code: data.has_microchip
+            ? emptyToNull(data.microchip_code)
+            : null,
+        microchip_date: data.has_microchip
+            ? dateToNull(data.microchip_date)
+            : null,
+        microchip_body_region: data.has_microchip
+            ? emptyToNull(data.microchip_body_region)
+            : null,
 
         clinical_observations: emptyToNull(data.clinical_observations),
         internal_notes: emptyToNull(data.internal_notes),
@@ -269,10 +533,59 @@ function normalizeBeforeSave(data: AddNewPetFormValues): AddNewPetPayload {
    LOCAL FORM COMPONENTS
    ====================================================== */
 
+function getErrorMessage(message: unknown): string | undefined {
+    return typeof message === "string" ? message : undefined;
+}
+
 function FieldError({message}: {message?: string}) {
-    if (!message) return null;
+    if (!message) {
+        return null;
+    }
 
     return <p className="text-sm font-medium text-red-600">{message}</p>;
+}
+
+function Section({
+    title,
+    children,
+}: {
+    title: string;
+    children: React.ReactNode;
+}) {
+    return (
+        <section>
+            <h3 className="mb-3 text-sm font-semibold text-slate-800">
+                {title}
+            </h3>
+
+            <div className="grid grid-cols-1 items-start gap-3 md:grid-cols-4">
+                {children}
+            </div>
+        </section>
+    );
+}
+
+function FieldSlot({
+    colSpan = 1,
+    children,
+}: {
+    colSpan?: 1 | 2 | 3 | 4;
+    children: React.ReactNode;
+}) {
+    const colSpanClass =
+        colSpan === 4
+            ? "md:col-span-4"
+            : colSpan === 3
+              ? "md:col-span-3"
+              : colSpan === 2
+                ? "md:col-span-2"
+                : "";
+
+    return (
+        <div className={colSpanClass}>
+            <FormCard>{children}</FormCard>
+        </div>
+    );
 }
 
 type TextFieldName =
@@ -295,11 +608,13 @@ function TextInputSection({
     label,
     placeholder,
     type = "text",
+    disabled = false,
 }: {
     name: TextFieldName;
     label: string;
     placeholder?: string;
     type?: "text" | "number" | "url";
+    disabled?: boolean;
 }) {
     const {
         register,
@@ -316,10 +631,11 @@ function TextInputSection({
                 {...register(name)}
                 type={type}
                 placeholder={placeholder}
-                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+                disabled={disabled}
+                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100 disabled:bg-slate-100 disabled:text-slate-400"
             />
 
-            <FieldError message={errors[name]?.message} />
+            <FieldError message={getErrorMessage(errors[name]?.message)} />
         </div>
     );
 }
@@ -328,6 +644,7 @@ function TextAreaSection({
     name,
     label,
     placeholder,
+    disabled = false,
 }: {
     name:
         | "body_description"
@@ -336,6 +653,7 @@ function TextAreaSection({
         | "internal_notes";
     label: string;
     placeholder?: string;
+    disabled?: boolean;
 }) {
     const {
         register,
@@ -352,20 +670,23 @@ function TextAreaSection({
                 {...register(name)}
                 rows={3}
                 placeholder={placeholder}
-                className="w-full resize-none rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+                disabled={disabled}
+                className="w-full resize-none rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100 disabled:bg-slate-100 disabled:text-slate-400"
             />
 
-            <FieldError message={errors[name]?.message} />
+            <FieldError message={getErrorMessage(errors[name]?.message)} />
         </div>
     );
 }
 
-function DateSection({
+function DateInputSection({
     name,
     label,
+    disabled = false,
 }: {
-    name: "birth_date" | "microchip_date";
+    name: "microchip_date";
     label: string;
+    disabled?: boolean;
 }) {
     const {
         register,
@@ -381,10 +702,12 @@ function DateSection({
             <input
                 {...register(name)}
                 type="date"
-                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+                disabled={disabled}
+                max={new Date().toISOString().slice(0, 10)}
+                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100 disabled:bg-slate-100 disabled:text-slate-400"
             />
 
-            <FieldError message={errors[name]?.message} />
+            <FieldError message={getErrorMessage(errors[name]?.message)} />
         </div>
     );
 }
@@ -400,14 +723,25 @@ function BooleanSection({
         | "has_microchip";
     label: string;
 }) {
-    const {register} = useFormContext<AddNewPetFormValues>();
+    const {
+        register,
+        formState: {errors},
+    } = useFormContext<AddNewPetFormValues>();
 
     return (
-        <label className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm font-semibold text-slate-700">
-            <input {...register(name)} type="checkbox" className="h-4 w-4" />
+        <div className="space-y-2">
+            <label className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm font-semibold text-slate-700">
+                <input
+                    {...register(name)}
+                    type="checkbox"
+                    className="h-4 w-4"
+                />
 
-            {label}
-        </label>
+                {label}
+            </label>
+
+            <FieldError message={getErrorMessage(errors[name]?.message)} />
+        </div>
     );
 }
 
@@ -427,12 +761,40 @@ function SexSection() {
                 {...register("sex")}
                 className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
             >
-                <option value="u">No especificado</option>
+                <option value="u">Indefinido</option>
                 <option value="m">Macho</option>
                 <option value="f">Hembra</option>
             </select>
 
-            <FieldError message={errors.sex?.message} />
+            <FieldError message={getErrorMessage(errors.sex?.message)} />
+        </div>
+    );
+}
+
+function SizeSection() {
+    const {
+        register,
+        formState: {errors},
+    } = useFormContext<AddNewPetFormValues>();
+
+    return (
+        <div className="space-y-2">
+            <label className="block text-sm font-semibold text-slate-700">
+                Tamaño
+            </label>
+
+            <select
+                {...register("size")}
+                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+            >
+                <option value="">Sin especificar</option>
+                <option value="small">Pequeño</option>
+                <option value="medium">Mediano</option>
+                <option value="large">Grande</option>
+                <option value="xlarge">Gigante</option>
+            </select>
+
+            <FieldError message={getErrorMessage(errors.size?.message)} />
         </div>
     );
 }
@@ -463,7 +825,7 @@ function SpeciesAndBreedSection({
     }, [selectedSpeciesId, speciesOptions]);
 
     return (
-        <div className="space-y-4">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div className="space-y-2">
                 <label className="block text-sm font-semibold text-slate-700">
                     Especie
@@ -486,7 +848,9 @@ function SpeciesAndBreedSection({
                     ))}
                 </select>
 
-                <FieldError message={errors.species_id?.message} />
+                <FieldError
+                    message={getErrorMessage(errors.species_id?.message)}
+                />
             </div>
 
             <div className="space-y-2">
@@ -508,7 +872,66 @@ function SpeciesAndBreedSection({
                     ))}
                 </select>
 
-                <FieldError message={errors.breed_id?.message} />
+                <FieldError
+                    message={getErrorMessage(errors.breed_id?.message)}
+                />
+            </div>
+        </div>
+    );
+}
+
+function BirthDateWithAgePreviewSection() {
+    const {
+        register,
+        control,
+        formState: {errors},
+    } = useFormContext<AddNewPetFormValues>();
+
+    const watchedBirthDate = useWatch({
+        control,
+        name: "birth_date",
+    });
+
+    const normalizedBirthDate = normalizeDateValue(watchedBirthDate);
+
+    return (
+        <div className="space-y-4">
+            <div className="max-w-md space-y-2">
+                <label className="block text-sm font-semibold text-slate-700">
+                    Fecha de nacimiento
+                </label>
+
+                <p className="text-xs leading-5 text-slate-500">
+                    Ingresa la fecha de nacimiento del paciente. La edad se
+                    calculará automáticamente a partir de esta fecha.
+                </p>
+
+                <input
+                    {...register("birth_date")}
+                    type="date"
+                    max={new Date().toISOString().slice(0, 10)}
+                    className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 shadow-sm outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+                />
+
+                <FieldError
+                    message={getErrorMessage(errors.birth_date?.message)}
+                />
+            </div>
+
+            <div className="max-w-md">
+                <p className="text-sm font-semibold text-slate-700">Edad</p>
+
+                <p className="mt-1 text-xs leading-5 text-slate-500">
+                    Vista previa calculada automáticamente a partir de la fecha
+                    de nacimiento.
+                </p>
+
+                <div className="mt-2 rounded-xl border border-slate-200 bg-slate-100 px-3 py-2 text-sm text-slate-700 shadow-sm">
+                    {formatPetAgeFromBirthDate(
+                        normalizedBirthDate,
+                        "Selecciona una fecha para calcular la edad.",
+                    )}
+                </div>
             </div>
         </div>
     );
@@ -527,7 +950,7 @@ function LastAttendingVetSection({
     return (
         <div className="space-y-2">
             <label className="block text-sm font-semibold text-slate-700">
-                Último veterinario tratante
+                Veterinario tratante anterior
             </label>
 
             <select
@@ -546,7 +969,9 @@ function LastAttendingVetSection({
                 ))}
             </select>
 
-            <FieldError message={errors.last_attending_vet_id?.message} />
+            <FieldError
+                message={getErrorMessage(errors.last_attending_vet_id?.message)}
+            />
         </div>
     );
 }
@@ -564,8 +989,18 @@ function NewPetPreviewPanel() {
         name: "sex",
     });
 
+    const speciesId = useWatch({
+        control,
+        name: "species_id",
+    });
+
+    const birthDate = useWatch({
+        control,
+        name: "birth_date",
+    });
+
     const sexLabel =
-        sex === "m" ? "Macho" : sex === "f" ? "Hembra" : "No especificado";
+        sex === "m" ? "Macho" : sex === "f" ? "Hembra" : "Indefinido";
 
     return (
         <aside className="w-72 shrink-0 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -590,6 +1025,23 @@ function NewPetPreviewPanel() {
                     <p className="text-slate-800">{sexLabel}</p>
                 </div>
 
+                <div>
+                    <p className="font-semibold text-slate-500">Edad</p>
+                    <p className="text-slate-800">
+                        {formatPetAgeFromBirthDate(
+                            birthDate ?? "",
+                            "Sin fecha todavía",
+                        )}
+                    </p>
+                </div>
+
+                <div>
+                    <p className="font-semibold text-slate-500">Especie</p>
+                    <p className="text-slate-800">
+                        {speciesId ? "Seleccionada" : "Sin especie todavía"}
+                    </p>
+                </div>
+
                 <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-3 text-xs text-slate-500">
                     La carga real de foto se puede conectar después. Por ahora
                     se deja preparado el campo <strong>photo_url</strong>.
@@ -608,50 +1060,23 @@ function PedigreeSection() {
     });
 
     return (
-        <div className="space-y-4">
-            <BooleanSection name="has_pedigree" label="Tiene pedigree" />
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+            <BooleanSection name="has_pedigree" label="Pedigrí" />
 
-            {hasPedigree && (
+            <div className="md:col-span-2">
                 <TextInputSection
                     name="pedigree_registry"
-                    label="Registro de pedigree"
-                    placeholder="Ej: Registro / número / entidad"
+                    label="Registro de pedigrí"
+                    placeholder="Ej: ABC-12345"
+                    disabled={!hasPedigree}
                 />
-            )}
-        </div>
-    );
-}
 
-function VisualIdentificationSection() {
-    const {control} = useFormContext<AddNewPetFormValues>();
-
-    const hasVisualIdentification = useWatch({
-        control,
-        name: "has_visual_identification",
-    });
-
-    return (
-        <div className="space-y-4">
-            <BooleanSection
-                name="has_visual_identification"
-                label="Tiene identificación visual"
-            />
-
-            {hasVisualIdentification && (
-                <>
-                    <TextInputSection
-                        name="visual_tag"
-                        label="Placa / código visual"
-                        placeholder="Ej: TAG-001"
-                    />
-
-                    <TextAreaSection
-                        name="visual_identification_or_tattoo_description"
-                        label="Descripción de identificación o tatuaje"
-                        placeholder="Descripción visible, tatuaje, marca externa, etc."
-                    />
-                </>
-            )}
+                {!hasPedigree && (
+                    <p className="mt-2 text-xs text-slate-500">
+                        Activa Pedigrí para registrar este dato.
+                    </p>
+                )}
+            </div>
         </div>
     );
 }
@@ -665,29 +1090,28 @@ function MicrochipSection() {
     });
 
     return (
-        <div className="space-y-4">
-            <BooleanSection name="has_microchip" label="Tiene microchip" />
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+            <BooleanSection name="has_microchip" label="Microchip" />
 
-            {hasMicrochip && (
-                <>
-                    <TextInputSection
-                        name="microchip_code"
-                        label="Código de microchip"
-                        placeholder="15 dígitos"
-                    />
+            <TextInputSection
+                name="microchip_code"
+                label="Código microchip"
+                placeholder="15 dígitos"
+                disabled={!hasMicrochip}
+            />
 
-                    <DateSection
-                        name="microchip_date"
-                        label="Fecha de implantación"
-                    />
+            <DateInputSection
+                name="microchip_date"
+                label="Fecha implantación"
+                disabled={!hasMicrochip}
+            />
 
-                    <TextInputSection
-                        name="microchip_body_region"
-                        label="Región corporal del microchip"
-                        placeholder="Ej: cuello izquierdo"
-                    />
-                </>
-            )}
+            <TextInputSection
+                name="microchip_body_region"
+                label="Ubicación corporal"
+                placeholder="Ej: cuello izquierdo"
+                disabled={!hasMicrochip}
+            />
         </div>
     );
 }
@@ -746,116 +1170,135 @@ export default function AddNewPetDialog({
                 <div className="flex items-start gap-6">
                     <NewPetPreviewPanel />
 
-                    <div className="flex-1 rounded-3xl border border-slate-200 bg-slate-50 p-4">
-                        <div className="mb-4 px-1">
+                    <div className="flex-1 rounded-3xl border border-slate-200 bg-slate-100 p-6 shadow-sm">
+                        <div className="mb-5">
                             <h3 className="text-lg font-semibold uppercase tracking-wide text-slate-700">
                                 Datos del paciente
                             </h3>
                         </div>
 
-                        <div className="grid grid-cols-1 items-start gap-3 md:grid-cols-2">
-                            <FormCard>
-                                <TextInputSection
-                                    name="name"
-                                    label="Nombre"
-                                    placeholder="Ej: Rocky"
-                                />
-                            </FormCard>
+                        <div className="space-y-6">
+                            <Section title="Datos básicos">
+                                <FieldSlot>
+                                    <TextInputSection
+                                        name="name"
+                                        label="Nombre"
+                                        placeholder="Ej: Rocky"
+                                    />
+                                </FieldSlot>
 
-                            <FormCard>
-                                <SexSection />
-                            </FormCard>
+                                <FieldSlot>
+                                    <SexSection />
+                                </FieldSlot>
 
-                            <FormCard>
-                                <SpeciesAndBreedSection
-                                    speciesOptions={speciesOptions}
-                                />
-                            </FormCard>
+                                <FieldSlot colSpan={2}>
+                                    <BirthDateWithAgePreviewSection />
+                                </FieldSlot>
 
-                            <FormCard>
-                                <div className="space-y-4">
+                                <FieldSlot colSpan={2}>
+                                    <SpeciesAndBreedSection
+                                        speciesOptions={speciesOptions}
+                                    />
+                                </FieldSlot>
+
+                                <FieldSlot>
                                     <BooleanSection
                                         name="sterilized"
                                         label="Esterilizado"
                                     />
+                                </FieldSlot>
 
-                                    <DateSection
-                                        name="birth_date"
-                                        label="Fecha de nacimiento"
-                                    />
-                                </div>
-                            </FormCard>
+                                <FieldSlot>
+                                    <SizeSection />
+                                </FieldSlot>
 
-                            <FormCard>
-                                <TextAreaSection
-                                    name="body_description"
-                                    label="Descripción corporal"
-                                    placeholder="Color, señas particulares, condición corporal, etc."
-                                />
-                            </FormCard>
-
-                            <FormCard>
-                                <div className="space-y-4">
-                                    <TextInputSection
-                                        name="size"
-                                        label="Tamaño"
-                                        placeholder="Ej: Pequeño, Mediano, Grande"
-                                    />
-
+                                <FieldSlot>
                                     <TextInputSection
                                         name="last_weight"
                                         label="Último peso"
                                         placeholder="Ej: 12.5"
                                         type="number"
                                     />
-                                </div>
-                            </FormCard>
+                                </FieldSlot>
+                            </Section>
 
-                            <FormCard>
-                                <LastAttendingVetSection
-                                    veterinarianOptions={veterinarianOptions}
-                                />
-                            </FormCard>
+                            <Section title="Identificación">
+                                <FieldSlot colSpan={2}>
+                                    <TextAreaSection
+                                        name="body_description"
+                                        label="Descripción corporal"
+                                        placeholder="Color, señas particulares, condición corporal, etc."
+                                    />
+                                </FieldSlot>
 
-                            <FormCard>
-                                <TextInputSection
-                                    name="reference"
-                                    label="Referencia"
-                                    placeholder="Referencia externa o interna"
-                                />
-                            </FormCard>
+                                <FieldSlot>
+                                    <TextInputSection
+                                        name="reference"
+                                        label="Referencia"
+                                        placeholder="Referencia externa o interna"
+                                    />
+                                </FieldSlot>
 
-                            <FormCard>
-                                <PedigreeSection />
-                            </FormCard>
+                                <FieldSlot>
+                                    <TextInputSection
+                                        name="visual_tag"
+                                        label="Placa, collar, etiqueta"
+                                        placeholder="Ej: TAG-001"
+                                    />
+                                </FieldSlot>
 
-                            <FormCard>
-                                <VisualIdentificationSection />
-                            </FormCard>
+                                <FieldSlot colSpan={3}>
+                                    <PedigreeSection />
+                                </FieldSlot>
 
-                            <FormCard>
-                                <MicrochipSection />
-                            </FormCard>
+                                <FieldSlot colSpan={4}>
+                                    <TextAreaSection
+                                        name="visual_identification_or_tattoo_description"
+                                        label="Identificación visual o descripción de tatuaje (si tiene)"
+                                        placeholder="Descripción visible, tatuaje, marca externa, etc."
+                                    />
+                                </FieldSlot>
+                            </Section>
 
-                            <FormCard>
-                                <PhotoSection />
-                            </FormCard>
+                            <Section title="Identificación electrónica">
+                                <FieldSlot colSpan={4}>
+                                    <MicrochipSection />
+                                </FieldSlot>
+                            </Section>
 
-                            <FormCard>
-                                <TextAreaSection
-                                    name="clinical_observations"
-                                    label="Observaciones clínicas"
-                                    placeholder="Observaciones clínicas iniciales"
-                                />
-                            </FormCard>
+                            <Section title="Observaciones">
+                                <FieldSlot colSpan={4}>
+                                    <TextAreaSection
+                                        name="clinical_observations"
+                                        label="Observaciones clínicas"
+                                        placeholder="Observaciones clínicas iniciales"
+                                    />
+                                </FieldSlot>
 
-                            <FormCard>
-                                <TextAreaSection
-                                    name="internal_notes"
-                                    label="Notas internas"
-                                    placeholder="Notas visibles solo para el equipo interno"
-                                />
-                            </FormCard>
+                                <FieldSlot colSpan={4}>
+                                    <TextAreaSection
+                                        name="internal_notes"
+                                        label="Notas internas"
+                                        placeholder="Notas visibles solo para el equipo interno"
+                                    />
+                                </FieldSlot>
+                            </Section>
+
+                            <Section title="Atención veterinaria">
+                                <FieldSlot colSpan={2}>
+                                    <LastAttendingVetSection
+                                        veterinarianOptions={
+                                            veterinarianOptions
+                                        }
+                                    />
+                                </FieldSlot>
+                            </Section>
+
+                            <Section title="Foto">
+                                <FieldSlot colSpan={2}>
+                                    <PhotoSection />
+                                </FieldSlot>
+                            </Section>
                         </div>
                     </div>
                 </div>
