@@ -1,4 +1,6 @@
-// src/api/saving/pet/updatePetDataApi.ts
+// src/api/pet/updatePetDataApi.ts
+
+import type {AxiosResponse} from "axios";
 
 import axiosInstance from "@/api/axiosInstance";
 import {PetDataInterface, PetStatus} from "@/features/pet/types/petTypes";
@@ -34,9 +36,15 @@ type RelationIdPatch = {
     status?: PetStatus;
 };
 
-export type UpdatePetDataPayload = SharedBasicPetPatch & RelationIdPatch;
+type AuditReasonPatch = {
+    reason?: string;
+};
 
-type UpdateBasicPetDataApiArgs = {
+export type UpdatePetDataPayload = SharedBasicPetPatch &
+    RelationIdPatch &
+    AuditReasonPatch;
+
+type UpdatePetDataApiArgs = {
     centerId: number;
     petId: number;
     data: UpdatePetDataPayload;
@@ -46,12 +54,10 @@ export async function updatePetDataApi({
     centerId,
     petId,
     data,
-}: UpdateBasicPetDataApiArgs): Promise<PetDataInterface> {
-    console.log("updatePetDataApi:: data = ", data);
+}: UpdatePetDataApiArgs): Promise<PetDataInterface> {
     const payload: UpdatePetDataPayload = {
         ...data,
     };
-    console.log("updatePetDataApi:: payload = ", payload);
 
     if ("breed_id" in payload) {
         payload.breed_id = payload.breed_id || null;
@@ -69,14 +75,23 @@ export async function updatePetDataApi({
         payload.last_attending_vet_id = payload.last_attending_vet_id ?? null;
     }
 
-    console.log("updatePetDataApi:: again, payload = ", payload);
+    if ("reason" in payload && typeof payload.reason === "string") {
+        const trimmedReason = payload.reason.trim();
 
-    const response = await axiosInstance.patch<PetDataInterface>(
-        `/pet/${centerId}/${petId}/update/`,
-        payload,
-    );
+        if (trimmedReason) {
+            payload.reason = trimmedReason;
+        } else {
+            delete payload.reason;
+        }
+    }
 
-    console.log("updatePetDataApi:: response.data = ", response.data);
+    console.log("updatePetDataApi:: payload = ", payload);
+
+    const response = await axiosInstance.patch<
+        PetDataInterface,
+        AxiosResponse<PetDataInterface>,
+        UpdatePetDataPayload
+    >(`/pet/${centerId}/${petId}/update/`, payload);
 
     return response.data;
 }

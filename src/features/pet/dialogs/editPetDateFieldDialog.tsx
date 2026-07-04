@@ -7,13 +7,18 @@ import {type ReactNode} from "react";
 import {useFormContext, useWatch} from "react-hook-form";
 
 import {PetDataInterface} from "@/features/pet/types/petTypes";
-import {updatePetDataApi} from "@/api/pet/updatePetDataApi";
+import {
+    updatePetDataApi,
+    type UpdatePetDataPayload,
+} from "@/api/pet/updatePetDataApi";
 import {usePetDataSlice} from "@/hooks/pet/usePetDataSlice";
-
-import PetIdentityPanel from "@/features/pet/components/petIdentityPanel";
 
 import EditSingleEntityFieldDialog from "@/shared/ui/entityDialogs/editSingleEntityFieldDialog";
 import SingleDateFieldSection from "@/shared/ui/forms/fields/singleDateFieldSection";
+import SingleTextFieldSection from "@/shared/ui/forms/fields/singleTextFieldSection";
+import PetIdentityPanel from "../components/petIdentityPanel";
+
+type DialogSize = "sm" | "md" | "lg" | "xl";
 
 type DateFieldValidatorContext = {
     pet: PetDataInterface;
@@ -66,16 +71,26 @@ type Props = {
     agePreviewEmptyText?: string;
 
     renderPreview?: DateFieldPreviewRenderer | null;
+
+    showChangeReason?: boolean;
+    requireChangeReason?: boolean;
+    changeReasonLabel?: string;
+    changeReasonDescription?: string;
+    changeReasonPlaceholder?: string;
+    changeReasonMaxLength?: number;
+
+    dialogSize?: DialogSize;
 };
 
 type FormValues = {
     value: string;
+    reason: string;
 };
 
 type UpdatePayload = {
     centerId: number;
     petId: number;
-    data: Record<string, unknown>;
+    data: UpdatePetDataPayload;
 };
 
 function normalizeDateValue(value: unknown): string {
@@ -193,6 +208,16 @@ function getDateFieldSubmitError(error: unknown, fieldName: string): string {
                 return fieldError;
             }
 
+            const reasonError = responseData.reason;
+
+            if (Array.isArray(reasonError) && reasonError.length > 0) {
+                return String(reasonError[0]);
+            }
+
+            if (typeof reasonError === "string") {
+                return reasonError;
+            }
+
             const detail = responseData.detail;
 
             if (Array.isArray(detail) && detail.length > 0) {
@@ -212,6 +237,151 @@ function getDateFieldSubmitError(error: unknown, fieldName: string): string {
     return "No se pudo actualizar el campo.";
 }
 
+export default function EditPetDateFieldDialog({
+    open,
+    centerId,
+    pet,
+    onClose,
+    onSaved,
+
+    title,
+    sectionTitle,
+    fieldName,
+    label,
+    description,
+
+    min,
+    max,
+
+    emptyAsNull = true,
+    validateValue = null,
+
+    showAgePreview = false,
+    agePreviewTitle = "Edad calculada",
+    agePreviewDescription = "La edad se calcula automáticamente a partir de la fecha de nacimiento.",
+    agePreviewEmptyText = "Selecciona una fecha para calcular la edad.",
+
+    renderPreview = null,
+
+    showChangeReason = true,
+    requireChangeReason = false,
+    changeReasonLabel = "Razón del Cambio (opcional)",
+    changeReasonDescription = "Indica por qué se está realizando este cambio. Esta información quedará registrada para auditoría.",
+    changeReasonPlaceholder = "Ej: Corrección de la fecha de nacimiento registrada inicialmente.",
+    changeReasonMaxLength = 300,
+
+    dialogSize = "md",
+}: Props) {
+    const {setPetDataSlice} = usePetDataSlice();
+
+    const currentValue = pet[fieldName];
+    const defaultValue = normalizeDateValue(currentValue);
+
+    return (
+        <EditSingleEntityFieldDialog<
+            PetDataInterface,
+            FormValues,
+            UpdatePayload
+        >
+            open={open}
+            title={title}
+            sectionTitle={sectionTitle}
+            entity={pet}
+            defaultValues={{
+                value: defaultValue,
+                reason: "",
+            }}
+            onClose={onClose}
+            sidePanel={<PetIdentityPanel pet={pet} />}
+            dialogSize={dialogSize}
+            buildPayload={async (values) => {
+                const rawValue = values.value ?? "";
+                const trimmedValue = rawValue.trim();
+
+                const rawReason = values.reason ?? "";
+                const trimmedReason = rawReason.trim();
+
+                if (!emptyAsNull && trimmedValue === "") {
+                    throw new Error("Este campo no puede estar vacío.");
+                }
+
+                const validationError = await validateValue?.(trimmedValue, {
+                    pet,
+                    fieldName,
+                    rawValue,
+                    trimmedValue,
+                    emptyAsNull,
+                    min,
+                    max,
+                });
+
+                if (validationError) {
+                    throw new Error(validationError);
+                }
+
+                if (requireChangeReason && !trimmedReason) {
+                    throw new Error("La razón del cambio es obligatoria.");
+                }
+
+                if (trimmedReason.length > changeReasonMaxLength) {
+                    throw new Error(
+                        `La razón del cambio no puede superar los ${changeReasonMaxLength} caracteres.`,
+                    );
+                }
+
+                const payloadValue =
+                    trimmedValue === ""
+                        ? emptyAsNull
+                            ? null
+                            : ""
+                        : trimmedValue;
+
+                const data = {
+                    [fieldName]: payloadValue,
+                } as UpdatePetDataPayload;
+
+                if (showChangeReason && trimmedReason) {
+                    data.reason = trimmedReason;
+                }
+
+                return {
+                    centerId,
+                    petId: pet.id,
+                    data,
+                };
+            }}
+            updateEntity={updatePetDataApi}
+            onSaved={(updatedPet) => {
+                setPetDataSlice(updatedPet);
+                onSaved?.(updatedPet);
+            }}
+            getErrorMessage={(error) =>
+                getDateFieldSubmitError(error, fieldName)
+            }
+        >
+            <DateFieldBody
+                pet={pet}
+                fieldName={fieldName}
+                label={label}
+                description={description}
+                min={min}
+                max={max}
+                emptyAsNull={emptyAsNull}
+                showAgePreview={showAgePreview}
+                agePreviewTitle={agePreviewTitle}
+                agePreviewDescription={agePreviewDescription}
+                agePreviewEmptyText={agePreviewEmptyText}
+                renderPreview={renderPreview}
+                showChangeReason={showChangeReason}
+                changeReasonLabel={changeReasonLabel}
+                changeReasonDescription={changeReasonDescription}
+                changeReasonPlaceholder={changeReasonPlaceholder}
+                changeReasonMaxLength={changeReasonMaxLength}
+            />
+        </EditSingleEntityFieldDialog>
+    );
+}
+
 function DateFieldBody({
     pet,
     fieldName,
@@ -225,6 +395,11 @@ function DateFieldBody({
     agePreviewDescription,
     agePreviewEmptyText,
     renderPreview,
+    showChangeReason,
+    changeReasonLabel,
+    changeReasonDescription,
+    changeReasonPlaceholder,
+    changeReasonMaxLength,
 }: {
     pet: PetDataInterface;
     fieldName: keyof PetDataInterface & string;
@@ -238,6 +413,11 @@ function DateFieldBody({
     agePreviewDescription: string;
     agePreviewEmptyText: string;
     renderPreview: DateFieldPreviewRenderer | null;
+    showChangeReason: boolean;
+    changeReasonLabel: string;
+    changeReasonDescription: string;
+    changeReasonPlaceholder: string;
+    changeReasonMaxLength: number;
 }) {
     const {control} = useFormContext<FormValues>();
 
@@ -249,7 +429,7 @@ function DateFieldBody({
     const normalizedValue = normalizeDateValue(watchedValue);
 
     return (
-        <div className="space-y-4">
+        <div className="w-full space-y-4">
             <SingleDateFieldSection
                 name="value"
                 label={label}
@@ -285,113 +465,19 @@ function DateFieldBody({
                 min,
                 max,
             })}
+
+            {showChangeReason && (
+                <SingleTextFieldSection
+                    name="reason"
+                    label={changeReasonLabel}
+                    description={changeReasonDescription}
+                    placeholder={changeReasonPlaceholder}
+                    maxLength={changeReasonMaxLength}
+                    rows={3}
+                    multiline={true}
+                    showCounter={true}
+                />
+            )}
         </div>
-    );
-}
-
-export default function EditPetDateFieldDialog({
-    open,
-    centerId,
-    pet,
-    onClose,
-    onSaved,
-    title,
-    sectionTitle,
-    fieldName,
-    label,
-    description,
-    min,
-    max,
-    emptyAsNull = true,
-    validateValue = null,
-    showAgePreview = false,
-    agePreviewTitle = "Edad",
-    agePreviewDescription = "Vista previa calculada automáticamente a partir de la fecha de nacimiento.",
-    agePreviewEmptyText = "Selecciona una fecha para calcular la edad.",
-    renderPreview = null,
-}: Props) {
-    const {setPetDataSlice} = usePetDataSlice();
-
-    const currentValue = pet[fieldName];
-    const defaultValue = normalizeDateValue(currentValue);
-
-    return (
-        <EditSingleEntityFieldDialog<
-            PetDataInterface,
-            FormValues,
-            UpdatePayload
-        >
-            open={open}
-            title={title}
-            sectionTitle={sectionTitle}
-            entity={pet}
-            defaultValues={{
-                value: defaultValue,
-            }}
-            onClose={onClose}
-            sidePanel={<PetIdentityPanel pet={pet} />}
-            buildPayload={async (values) => {
-                const rawValue = values.value ?? "";
-                const trimmedValue = normalizeDateValue(rawValue);
-
-                if (!emptyAsNull && trimmedValue === "") {
-                    throw new Error("Este campo no puede estar vacío.");
-                }
-
-                if (validateValue) {
-                    const validationError = await validateValue(trimmedValue, {
-                        pet,
-                        fieldName,
-                        rawValue,
-                        trimmedValue,
-                        emptyAsNull,
-                        min,
-                        max,
-                    });
-
-                    if (validationError) {
-                        throw new Error(validationError);
-                    }
-                }
-
-                const payloadValue =
-                    trimmedValue === ""
-                        ? emptyAsNull
-                            ? null
-                            : ""
-                        : trimmedValue;
-
-                return {
-                    centerId,
-                    petId: pet.id,
-                    data: {
-                        [fieldName]: payloadValue,
-                    },
-                };
-            }}
-            updateEntity={updatePetDataApi}
-            onSaved={(updatedPet) => {
-                setPetDataSlice(updatedPet);
-                onSaved?.(updatedPet);
-            }}
-            getErrorMessage={(error) =>
-                getDateFieldSubmitError(error, fieldName)
-            }
-        >
-            <DateFieldBody
-                pet={pet}
-                fieldName={fieldName}
-                label={label}
-                description={description}
-                min={min}
-                max={max}
-                emptyAsNull={emptyAsNull}
-                showAgePreview={showAgePreview}
-                agePreviewTitle={agePreviewTitle}
-                agePreviewDescription={agePreviewDescription}
-                agePreviewEmptyText={agePreviewEmptyText}
-                renderPreview={renderPreview}
-            />
-        </EditSingleEntityFieldDialog>
     );
 }

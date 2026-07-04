@@ -3,15 +3,20 @@
 "use client";
 
 import {PetDataInterface} from "@/features/pet/types/petTypes";
-import {updatePetDataApi} from "@/api/pet/updatePetDataApi";
+import {
+    updatePetDataApi,
+    type UpdatePetDataPayload,
+} from "@/api/pet/updatePetDataApi";
 import {usePetDataSlice} from "@/hooks/pet/usePetDataSlice";
-
-import PetIdentityPanel from "@/features/pet/components/petIdentityPanel";
 
 import EditSingleEntityFieldDialog from "@/shared/ui/entityDialogs/editSingleEntityFieldDialog";
 import SingleSelectFieldSection, {
-    SingleSelectOption,
+    type SingleSelectOption,
 } from "@/shared/ui/forms/fields/singleSelectFieldSection";
+import SingleTextFieldSection from "@/shared/ui/forms/fields/singleTextFieldSection";
+import PetIdentityPanel from "../components/petIdentityPanel";
+
+type DialogSize = "sm" | "md" | "lg" | "xl";
 
 type Props = {
     open: boolean;
@@ -25,24 +30,45 @@ type Props = {
     fieldName: keyof PetDataInterface & string;
     label: string;
     description?: string;
+
     options: SingleSelectOption[];
 
     allowEmpty?: boolean;
     emptyOptionLabel?: string;
     emptyAsNull?: boolean;
 
-    parseValue?: (value: string) => unknown;
+    showChangeReason?: boolean;
+    requireChangeReason?: boolean;
+    changeReasonLabel?: string;
+    changeReasonDescription?: string;
+    changeReasonPlaceholder?: string;
+    changeReasonMaxLength?: number;
+
+    dialogSize?: DialogSize;
 };
 
 type FormValues = {
     value: string;
+    reason: string;
 };
 
 type UpdatePayload = {
     centerId: number;
     petId: number;
-    data: Record<string, unknown>;
+    data: UpdatePetDataPayload;
 };
+
+function normalizeSelectValue(value: unknown): string {
+    if (value === null || value === undefined) {
+        return "";
+    }
+
+    if (typeof value === "string") {
+        return value;
+    }
+
+    return String(value);
+}
 
 export default function EditPetSelectFieldDialog({
     open,
@@ -50,27 +76,32 @@ export default function EditPetSelectFieldDialog({
     pet,
     onClose,
     onSaved,
+
     title,
     sectionTitle,
     fieldName,
     label,
     description,
+
     options,
+
     allowEmpty = false,
     emptyOptionLabel = "Sin especificar",
     emptyAsNull = true,
-    parseValue,
+
+    showChangeReason = true,
+    requireChangeReason = false,
+    changeReasonLabel = "Razón del Cambio (opcional)",
+    changeReasonDescription = "Indica por qué se está realizando este cambio. Esta información quedará registrada para auditoría.",
+    changeReasonPlaceholder = "Ej: Corrección de información registrada previamente.",
+    changeReasonMaxLength = 300,
+
+    dialogSize = "md",
 }: Props) {
     const {setPetDataSlice} = usePetDataSlice();
 
-    const currentValue = pet[fieldName];
-
-    const defaultValue =
-        typeof currentValue === "string"
-            ? currentValue
-            : currentValue == null
-              ? ""
-              : String(currentValue);
+    const rawValue = pet[fieldName];
+    const defaultValue = normalizeSelectValue(rawValue);
 
     return (
         <EditSingleEntityFieldDialog<
@@ -84,29 +115,56 @@ export default function EditPetSelectFieldDialog({
             entity={pet}
             defaultValues={{
                 value: defaultValue,
+                reason: "",
             }}
-            onClose={onClose}
             sidePanel={<PetIdentityPanel pet={pet} />}
+            onClose={onClose}
+            dialogSize={dialogSize}
             buildPayload={(values) => {
-                if (!allowEmpty && values.value === "") {
-                    throw new Error("Selecciona una opción válida.");
+                const selectedValue = values.value.trim();
+                const trimmedReason = values.reason.trim();
+
+                if (!allowEmpty && !selectedValue) {
+                    throw new Error("Debes seleccionar una opción.");
+                }
+
+                const optionExists = options.some(
+                    (option) => option.value === selectedValue,
+                );
+
+                if (selectedValue && !optionExists) {
+                    throw new Error("La opción seleccionada no es válida.");
+                }
+
+                if (requireChangeReason && !trimmedReason) {
+                    throw new Error("La razón del cambio es obligatoria.");
+                }
+
+                if (trimmedReason.length > changeReasonMaxLength) {
+                    throw new Error(
+                        `La razón del cambio no puede superar los ${changeReasonMaxLength} caracteres.`,
+                    );
                 }
 
                 const payloadValue =
-                    values.value === ""
+                    selectedValue === ""
                         ? emptyAsNull
                             ? null
                             : ""
-                        : parseValue
-                          ? parseValue(values.value)
-                          : values.value;
+                        : selectedValue;
+
+                const data = {
+                    [fieldName]: payloadValue,
+                } as UpdatePetDataPayload;
+
+                if (showChangeReason && trimmedReason) {
+                    data.reason = trimmedReason;
+                }
 
                 return {
                     centerId,
                     petId: pet.id,
-                    data: {
-                        [fieldName]: payloadValue,
-                    },
+                    data,
                 };
             }}
             updateEntity={updatePetDataApi}
@@ -122,13 +180,29 @@ export default function EditPetSelectFieldDialog({
                 return "No se pudo actualizar el campo.";
             }}
         >
-            <SingleSelectFieldSection
-                name="value"
-                label={label}
-                description={description}
-                placeholder={emptyOptionLabel}
-                options={options}
-            />
+            <div className="w-full space-y-4">
+                <SingleSelectFieldSection
+                    name="value"
+                    label={label}
+                    description={description}
+                    placeholder={emptyOptionLabel}
+                    options={options}
+                    includeEmptyOption={allowEmpty}
+                />
+
+                {showChangeReason && (
+                    <SingleTextFieldSection
+                        name="reason"
+                        label={changeReasonLabel}
+                        description={changeReasonDescription}
+                        placeholder={changeReasonPlaceholder}
+                        maxLength={changeReasonMaxLength}
+                        rows={3}
+                        multiline={true}
+                        showCounter={true}
+                    />
+                )}
+            </div>
         </EditSingleEntityFieldDialog>
     );
 }

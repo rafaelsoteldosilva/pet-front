@@ -2,8 +2,9 @@
 
 "use client";
 
-import FormField from "@/shared/ui/forms/formField";
 import {FieldValues, useFormContext} from "react-hook-form";
+
+import FormField from "@/shared/ui/forms/formField";
 
 export type SingleSelectOption = {
     value: string;
@@ -17,6 +18,8 @@ type Props = {
     description?: string;
     placeholder?: string;
     options: SingleSelectOption[];
+
+    includeEmptyOption?: boolean;
 };
 
 export default function SingleSelectFieldSection({
@@ -25,6 +28,7 @@ export default function SingleSelectFieldSection({
     description,
     placeholder = "Seleccione una opción",
     options,
+    includeEmptyOption = true,
 }: Props) {
     const {register} = useFormContext<FieldValues>();
 
@@ -34,7 +38,7 @@ export default function SingleSelectFieldSection({
                 {...register(name)}
                 className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800 shadow-sm outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-200"
             >
-                <option value="">{placeholder}</option>
+                {includeEmptyOption && <option value="">{placeholder}</option>}
 
                 {options.map((option) => (
                     <option

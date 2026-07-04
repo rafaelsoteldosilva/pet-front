@@ -1,15 +1,19 @@
-// src/features/pet/dialogs/EditPetTextFieldDialog.tsx
+// src/features/pet/dialogs/editPetTextFieldDialog.tsx
 
 "use client";
 
 import {PetDataInterface} from "@/features/pet/types/petTypes";
-import {updatePetDataApi} from "@/api/pet/updatePetDataApi";
+import {
+    updatePetDataApi,
+    type UpdatePetDataPayload,
+} from "@/api/pet/updatePetDataApi";
 import {usePetDataSlice} from "@/hooks/pet/usePetDataSlice";
-
-import PetIdentityPanel from "@/features/pet/components/petIdentityPanel";
 
 import EditSingleEntityFieldDialog from "@/shared/ui/entityDialogs/editSingleEntityFieldDialog";
 import SingleTextFieldSection from "@/shared/ui/forms/fields/singleTextFieldSection";
+import PetIdentityPanel from "../components/petIdentityPanel";
+
+type DialogSize = "sm" | "md" | "lg" | "xl";
 
 type Props = {
     open: boolean;
@@ -30,17 +34,39 @@ type Props = {
     emptyAsNull?: boolean;
     showCounter?: boolean;
     validateValue?: ((value: string) => string | null) | null;
+
+    showChangeReason?: boolean;
+    requireChangeReason?: boolean;
+    changeReasonLabel?: string;
+    changeReasonDescription?: string;
+    changeReasonPlaceholder?: string;
+    changeReasonMaxLength?: number;
+
+    dialogSize?: DialogSize;
 };
 
 type FormValues = {
     value: string;
+    reason: string;
 };
 
 type UpdatePayload = {
     centerId: number;
     petId: number;
-    data: Record<string, unknown>;
+    data: UpdatePetDataPayload;
 };
+
+function normalizeTextValue(value: unknown): string {
+    if (value === null || value === undefined) {
+        return "";
+    }
+
+    if (typeof value === "string") {
+        return value;
+    }
+
+    return String(value);
+}
 
 export default function EditPetTextFieldDialog({
     open,
@@ -48,6 +74,7 @@ export default function EditPetTextFieldDialog({
     pet,
     onClose,
     onSaved,
+
     title,
     sectionTitle,
     fieldName,
@@ -60,12 +87,20 @@ export default function EditPetTextFieldDialog({
     emptyAsNull = true,
     showCounter = true,
     validateValue = null,
+
+    showChangeReason = true,
+    requireChangeReason = false,
+    changeReasonLabel = "Razón del Cambio (opcional)",
+    changeReasonDescription = "Indica por qué se está realizando este cambio. Esta información quedará registrada para auditoría.",
+    changeReasonPlaceholder = "Ej: Corrección de información registrada previamente.",
+    changeReasonMaxLength = 300,
+
+    dialogSize = "md",
 }: Props) {
     const {setPetDataSlice} = usePetDataSlice();
 
     const rawValue = pet[fieldName];
-
-    const defaultValue = typeof rawValue === "string" ? rawValue : "";
+    const defaultValue = normalizeTextValue(rawValue);
 
     return (
         <EditSingleEntityFieldDialog<
@@ -79,11 +114,20 @@ export default function EditPetTextFieldDialog({
             entity={pet}
             defaultValues={{
                 value: defaultValue,
+                reason: "",
             }}
             onClose={onClose}
+            dialogSize={dialogSize}
             sidePanel={<PetIdentityPanel pet={pet} />}
             buildPayload={(values) => {
                 const trimmedValue = values.value.trim();
+                const trimmedReason = values.reason.trim();
+
+                if (trimmedValue.length > maxLength) {
+                    throw new Error(
+                        `El campo no puede superar los ${maxLength} caracteres.`,
+                    );
+                }
 
                 const validationError = validateValue?.(trimmedValue);
 
@@ -91,15 +135,31 @@ export default function EditPetTextFieldDialog({
                     throw new Error(validationError);
                 }
 
+                if (requireChangeReason && !trimmedReason) {
+                    throw new Error("La razón del cambio es obligatoria.");
+                }
+
+                if (trimmedReason.length > changeReasonMaxLength) {
+                    throw new Error(
+                        `La razón del cambio no puede superar los ${changeReasonMaxLength} caracteres.`,
+                    );
+                }
+
+                const fieldValue =
+                    emptyAsNull && trimmedValue === "" ? null : trimmedValue;
+
+                const data = {
+                    [fieldName]: fieldValue,
+                } as UpdatePetDataPayload;
+
+                if (showChangeReason && trimmedReason) {
+                    data.reason = trimmedReason;
+                }
+
                 return {
                     centerId,
                     petId: pet.id,
-                    data: {
-                        [fieldName]:
-                            emptyAsNull && trimmedValue === ""
-                                ? null
-                                : trimmedValue,
-                    },
+                    data,
                 };
             }}
             updateEntity={updatePetDataApi}
@@ -115,16 +175,31 @@ export default function EditPetTextFieldDialog({
                 return "No se pudo actualizar el campo.";
             }}
         >
-            <SingleTextFieldSection
-                name="value"
-                label={label}
-                description={description}
-                placeholder={placeholder}
-                maxLength={maxLength}
-                rows={rows}
-                multiline={multiline}
-                showCounter={showCounter}
-            />
+            <div className="w-full space-y-4">
+                <SingleTextFieldSection
+                    name="value"
+                    label={label}
+                    description={description}
+                    placeholder={placeholder}
+                    maxLength={maxLength}
+                    rows={rows}
+                    multiline={multiline}
+                    showCounter={showCounter}
+                />
+
+                {showChangeReason && (
+                    <SingleTextFieldSection
+                        name="reason"
+                        label={changeReasonLabel}
+                        description={changeReasonDescription}
+                        placeholder={changeReasonPlaceholder}
+                        maxLength={changeReasonMaxLength}
+                        rows={3}
+                        multiline={true}
+                        showCounter={true}
+                    />
+                )}
+            </div>
         </EditSingleEntityFieldDialog>
     );
 }

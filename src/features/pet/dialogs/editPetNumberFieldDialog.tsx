@@ -3,14 +3,19 @@
 "use client";
 
 import {PetDataInterface} from "@/features/pet/types/petTypes";
-import {updatePetDataApi} from "@/api/pet/updatePetDataApi";
+import {
+    updatePetDataApi,
+    type UpdatePetDataPayload,
+} from "@/api/pet/updatePetDataApi";
 import {usePetDataSlice} from "@/hooks/pet/usePetDataSlice";
 
 import PetIdentityPanel from "@/features/pet/components/petIdentityPanel";
 
 import EditSingleEntityFieldDialog from "@/shared/ui/entityDialogs/editSingleEntityFieldDialog";
 import SingleNumberFieldSection from "@/shared/ui/forms/fields/singleNumberFieldSection";
-// import SingleNumberFieldSection from "@/shared/ui/forms/fields/singleNumberFieldSection";
+import SingleTextFieldSection from "@/shared/ui/forms/fields/singleTextFieldSection";
+
+type DialogSize = "sm" | "md" | "lg" | "xl";
 
 type Props = {
     open: boolean;
@@ -30,16 +35,26 @@ type Props = {
     min?: number;
     max?: number;
     emptyAsNull?: boolean;
+
+    showChangeReason?: boolean;
+    requireChangeReason?: boolean;
+    changeReasonLabel?: string;
+    changeReasonDescription?: string;
+    changeReasonPlaceholder?: string;
+    changeReasonMaxLength?: number;
+
+    dialogSize?: DialogSize;
 };
 
 type FormValues = {
     value: string;
+    reason: string;
 };
 
 type UpdatePayload = {
     centerId: number;
     petId: number;
-    data: Record<string, unknown>;
+    data: UpdatePetDataPayload;
 };
 
 export default function EditPetNumberFieldDialog({
@@ -48,6 +63,7 @@ export default function EditPetNumberFieldDialog({
     pet,
     onClose,
     onSaved,
+
     title,
     sectionTitle,
     fieldName,
@@ -59,11 +75,19 @@ export default function EditPetNumberFieldDialog({
     min,
     max,
     emptyAsNull = true,
+
+    showChangeReason = true,
+    requireChangeReason = false,
+    changeReasonLabel = "Razón del Cambio (opcional)",
+    changeReasonDescription = "Indica por qué se está realizando este cambio. Esta información quedará registrada para auditoría.",
+    changeReasonPlaceholder = "Ej: Corrección de información registrada previamente.",
+    changeReasonMaxLength = 300,
+
+    dialogSize = "lg",
 }: Props) {
     const {setPetDataSlice} = usePetDataSlice();
 
     const currentValue = pet[fieldName];
-
     const defaultValue = currentValue == null ? "" : String(currentValue);
 
     return (
@@ -78,11 +102,14 @@ export default function EditPetNumberFieldDialog({
             entity={pet}
             defaultValues={{
                 value: defaultValue,
+                reason: "",
             }}
             onClose={onClose}
             sidePanel={<PetIdentityPanel pet={pet} />}
+            dialogSize={dialogSize}
             buildPayload={(values) => {
                 const trimmedValue = values.value.trim();
+                const trimmedReason = values.reason.trim();
 
                 let payloadValue: number | string | null;
 
@@ -110,12 +137,28 @@ export default function EditPetNumberFieldDialog({
                     payloadValue = parsedValue;
                 }
 
+                if (requireChangeReason && !trimmedReason) {
+                    throw new Error("La razón del cambio es obligatoria.");
+                }
+
+                if (trimmedReason.length > changeReasonMaxLength) {
+                    throw new Error(
+                        `La razón del cambio no puede superar los ${changeReasonMaxLength} caracteres.`,
+                    );
+                }
+
+                const data = {
+                    [fieldName]: payloadValue,
+                } as UpdatePetDataPayload;
+
+                if (showChangeReason && trimmedReason) {
+                    data.reason = trimmedReason;
+                }
+
                 return {
                     centerId,
                     petId: pet.id,
-                    data: {
-                        [fieldName]: payloadValue,
-                    },
+                    data,
                 };
             }}
             updateEntity={updatePetDataApi}
@@ -131,16 +174,31 @@ export default function EditPetNumberFieldDialog({
                 return "No se pudo actualizar el campo.";
             }}
         >
-            <SingleNumberFieldSection
-                name="value"
-                label={label}
-                description={description}
-                placeholder={placeholder}
-                suffix={suffix}
-                step={step}
-                min={min}
-                max={max}
-            />
+            <div className="w-full space-y-4">
+                <SingleNumberFieldSection
+                    name="value"
+                    label={label}
+                    description={description}
+                    placeholder={placeholder}
+                    suffix={suffix}
+                    step={step}
+                    min={min}
+                    max={max}
+                />
+
+                {showChangeReason && (
+                    <SingleTextFieldSection
+                        name="reason"
+                        label={changeReasonLabel}
+                        description={changeReasonDescription}
+                        placeholder={changeReasonPlaceholder}
+                        maxLength={changeReasonMaxLength}
+                        rows={3}
+                        multiline={true}
+                        showCounter={true}
+                    />
+                )}
+            </div>
         </EditSingleEntityFieldDialog>
     );
 }

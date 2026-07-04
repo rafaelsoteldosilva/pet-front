@@ -34,9 +34,9 @@ export default function SpeciesAndBreedFormSection({centerId}: Props) {
     const {errors} = formState;
 
     const {
-        results,
-        loading,
-        error,
+        speciesAndBreedsResults,
+        speciesAndBreedsLoading,
+        speciesAndBreedsError,
         loadedCenterId,
         loadAllowedSpeciesAndBreedsSlice,
     } = useAllowedSpeciesAndBreedsSlice();
@@ -47,8 +47,10 @@ export default function SpeciesAndBreedFormSection({centerId}: Props) {
     const previousSpeciesIdRef = useRef<string | undefined>(selectedSpeciesId);
     const requestedCenterIdRef = useRef<number | null>(null);
 
-    const speciesWithBreeds: SpeciesWithBreedsOption[] = Array.isArray(results)
-        ? results
+    const speciesWithBreeds: SpeciesWithBreedsOption[] = Array.isArray(
+        speciesAndBreedsResults,
+    )
+        ? speciesAndBreedsResults
         : [];
 
     useEffect(() => {
@@ -56,7 +58,7 @@ export default function SpeciesAndBreedFormSection({centerId}: Props) {
             return;
         }
 
-        if (loading) {
+        if (speciesAndBreedsLoading) {
             return;
         }
 
@@ -70,7 +72,12 @@ export default function SpeciesAndBreedFormSection({centerId}: Props) {
 
         requestedCenterIdRef.current = centerId;
         loadAllowedSpeciesAndBreedsSlice(centerId);
-    }, [centerId, loading, loadedCenterId, loadAllowedSpeciesAndBreedsSlice]);
+    }, [
+        centerId,
+        speciesAndBreedsLoading,
+        loadedCenterId,
+        loadAllowedSpeciesAndBreedsSlice,
+    ]);
 
     useEffect(() => {
         if (loadedCenterId === centerId) {
@@ -109,7 +116,7 @@ export default function SpeciesAndBreedFormSection({centerId}: Props) {
     }, [selectedSpeciesId, setValue]);
 
     useEffect(() => {
-        if (loading) {
+        if (speciesAndBreedsLoading) {
             return;
         }
 
@@ -129,21 +136,21 @@ export default function SpeciesAndBreedFormSection({centerId}: Props) {
             setValue("breed_id", "");
         }
     }, [
-        loading,
+        speciesAndBreedsLoading,
         selectedSpeciesEntry,
         availableBreeds,
         selectedBreedId,
         setValue,
     ]);
 
-    if (loading && speciesWithBreeds.length === 0) {
+    if (speciesAndBreedsLoading && speciesWithBreeds.length === 0) {
         return <div>Cargando catálogo...</div>;
     }
 
-    if (error) {
+    if (speciesAndBreedsError) {
         return (
             <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-                Error cargando especies y razas: {error}
+                Error cargando especies y razas: {speciesAndBreedsError}
             </div>
         );
     }

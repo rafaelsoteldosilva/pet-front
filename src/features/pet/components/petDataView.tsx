@@ -60,14 +60,6 @@ function formatSex(sex: "m" | "f" | "u" | string | null | undefined) {
     return "—";
 }
 
-function hasRegisteredSex(sex: "m" | "f" | "u" | string | null | undefined) {
-    const normalizedSex = String(sex ?? "")
-        .trim()
-        .toLowerCase();
-
-    return normalizedSex === "m" || normalizedSex === "f";
-}
-
 function formatYesNo(val: boolean) {
     return val ? "Sí" : "No";
 }
@@ -82,7 +74,9 @@ function formatAge(birthDate: string | null) {
     let years = today.getFullYear() - birth.getFullYear();
     let months = today.getMonth() - birth.getMonth();
 
-    if (today.getDate() < birth.getDate()) months--;
+    if (today.getDate() < birth.getDate()) {
+        months--;
+    }
 
     if (months < 0) {
         years--;
@@ -95,6 +89,42 @@ function formatAge(birthDate: string | null) {
     const m = `${months} mes${months !== 1 ? "es" : ""}`;
 
     return y ? `${y} y ${m}` : m;
+}
+
+function formatBirthDate(birthDate: string | null) {
+    if (!birthDate) return "—";
+
+    const dateOnly = birthDate.slice(0, 10);
+    const parts = dateOnly.split("-");
+
+    if (parts.length !== 3) return "—";
+
+    const [year, month, day] = parts;
+
+    if (!year || !month || !day) return "—";
+
+    const monthIndex = Number(month) - 1;
+
+    const monthLabels = [
+        "Jan",
+        "Feb",
+        "Mar",
+        "Apr",
+        "May",
+        "Jun",
+        "Jul",
+        "Aug",
+        "Sep",
+        "Oct",
+        "Nov",
+        "Dec",
+    ];
+
+    const monthLabel = monthLabels[monthIndex];
+
+    if (!monthLabel) return "—";
+
+    return `${monthLabel}/${day.padStart(2, "0")}/${year}`;
 }
 
 function normalizePetStatus(
@@ -243,9 +273,9 @@ export default function PetDataView({
     const {pet, petLoading, petError, setPetDataSlice} = usePetDataSlice();
 
     const {
-        centerVets: centerVets,
-        centerVetsLoading: centerVetsLoading,
-        centerVetsError: centerVetsError,
+        centerVets,
+        centerVetsLoading,
+        centerVetsError,
         loadedCenterId: centerVetsLoadedCenterId,
         loadCenterVetsSlice,
     } = useCenterVetsSlice({centerId});
@@ -253,7 +283,6 @@ export default function PetDataView({
     const [openNameDialog, setOpenNameDialog] = useState(false);
     const [openBirthDateDialog, setOpenBirthDateDialog] = useState(false);
     const [openSpeciesDialog, setOpenSpeciesDialog] = useState(false);
-    const [openBreedDialog, setOpenBreedDialog] = useState(false);
 
     const [openBodyDescriptionDialog, setOpenBodyDescriptionDialog] =
         useState(false);
@@ -301,10 +330,6 @@ export default function PetDataView({
         number | null
     >(null);
 
-    // -------------------- THIS IS PART 1 -------------------------------
-
-    // ---------------- GET CENTERID FROM APPSTATECONTEXT.TS ---------------------------
-
     if (petLoading) {
         return <div className="text-slate-500">Cargando paciente…</div>;
     }
@@ -324,8 +349,6 @@ export default function PetDataView({
         : [];
 
     const hasActivePrimaryContact = hasActivePrimaryPetContact(petContactLinks);
-
-    const hasPetSexRegistered = hasRegisteredSex(pet.sex);
 
     const hasPedigreeRegistryValue =
         typeof pet.pedigree_registry === "string" &&
@@ -360,7 +383,7 @@ export default function PetDataView({
     const canEditContacts = enableEdition && editPetContactRule.allowed;
     const canRemoveContacts = enableEdition && removePetContactRule.allowed;
 
-    const canEditBasicPetdata =
+    const canEditPetData =
         clinicalRecordStatus !== null &&
         canEditPetDataByDraftStatusOnly(clinicalRecordStatus) &&
         enableEdition;
@@ -425,10 +448,7 @@ export default function PetDataView({
 
             setPetDataSlice(updatedPet);
         } catch (error) {
-            console.error(
-                "BasicPetDataView::handleRemovePetContact error:",
-                error,
-            );
+            console.error("PetDataView::handleRemovePetContact error:", error);
             setContactDeleteError(getAxiosErrorMessage(error));
         } finally {
             setDeletingPetContactId(null);
@@ -439,42 +459,35 @@ export default function PetDataView({
        Field edit functions
        ====================================================== */
 
-    const editName = canEditBasicPetdata
-        ? () => setOpenNameDialog(true)
-        : undefined;
-    const editBirthDate = canEditBasicPetdata
+    const editName = canEditPetData ? () => setOpenNameDialog(true) : undefined;
+    const editBirthDate = canEditPetData
         ? () => setOpenBirthDateDialog(true)
         : undefined;
-    const editSpecies = canEditBasicPetdata
+    const editSpeciesAndBreed = canEditPetData
         ? () => setOpenSpeciesDialog(true)
         : undefined;
-    const editBreed = canEditBasicPetdata
-        ? () => setOpenBreedDialog(true)
-        : undefined;
 
-    const canEditPedigreeRegistry = canEditBasicPetdata && pet.has_pedigree;
-    const disablePedigreeRegistryEdit =
-        canEditBasicPetdata && !pet.has_pedigree;
+    const canEditPedigreeRegistry = canEditPetData && pet.has_pedigree;
+    const disablePedigreeRegistryEdit = canEditPetData && !pet.has_pedigree;
 
-    const canEditMicrochipCode = canEditBasicPetdata && pet.has_microchip;
-    const disableMicrochipCodeEdit = canEditBasicPetdata && !pet.has_microchip;
+    const canEditMicrochipCode = canEditPetData && pet.has_microchip;
+    const disableMicrochipCodeEdit = canEditPetData && !pet.has_microchip;
 
-    const canEditMicrochipDate = canEditBasicPetdata && pet.has_microchip;
-    const disableMicrochipDateEdit = canEditBasicPetdata && !pet.has_microchip;
+    const canEditMicrochipDate = canEditPetData && pet.has_microchip;
+    const disableMicrochipDateEdit = canEditPetData && !pet.has_microchip;
 
-    const canEditMicrochipRegion = canEditBasicPetdata && pet.has_microchip;
-    const disableMicrochipRegionEdit =
-        canEditBasicPetdata && !pet.has_microchip;
+    const canEditMicrochipRegion = canEditPetData && pet.has_microchip;
+    const disableMicrochipRegionEdit = canEditPetData && !pet.has_microchip;
 
     const editPedigreeRegistry = canEditPedigreeRegistry
         ? () => setOpenPedigreeRegistryDialog(true)
         : undefined;
 
-    const editVisualIdentificationOrTatooDescription = canEditBasicPetdata
+    const editVisualIdentificationOrTatooDescription = canEditPetData
         ? () => setOpenVisualIdentificationOrTatooDescriptionDialog(true)
         : undefined;
 
-    const editHasMicrochip = canEditBasicPetdata
+    const editHasMicrochip = canEditPetData
         ? () => setOpenHasMicrochipDialog(true)
         : undefined;
 
@@ -490,59 +503,54 @@ export default function PetDataView({
         ? () => setOpenMicrochipRegionDialog(true)
         : undefined;
 
-    const editClinicalObservations = canEditBasicPetdata
+    const editClinicalObservations = canEditPetData
         ? () => setOpenClinicalObservationsDialog(true)
         : undefined;
 
-    const editInternalNotes = canEditBasicPetdata
+    const editInternalNotes = canEditPetData
         ? () => setOpenInternalNotesDialog(true)
         : undefined;
 
-    const editVet = canEditBasicPetdata
+    const editVet = canEditPetData
         ? handleOpenLastVeterinarianDialog
         : undefined;
 
-    const editBodyDescription = canEditBasicPetdata
+    const editBodyDescription = canEditPetData
         ? () => setOpenBodyDescriptionDialog(true)
         : undefined;
 
-    const editReference = canEditBasicPetdata
+    const editReference = canEditPetData
         ? () => setOpenReferenceDialog(true)
         : undefined;
 
-    const editSex = canEditBasicPetdata
-        ? () => setOpenSexDialog(true)
-        : undefined;
+    const editSex = canEditPetData ? () => setOpenSexDialog(true) : undefined;
 
-    const editSize = canEditBasicPetdata
-        ? () => setOpenSizeDialog(true)
-        : undefined;
+    const editSize = canEditPetData ? () => setOpenSizeDialog(true) : undefined;
 
-    const editSterilized = canEditBasicPetdata
+    const editSterilized = canEditPetData
         ? () => setOpenSterilizedDialog(true)
         : undefined;
 
-    const editHasPedigree = canEditBasicPetdata
+    const editHasPedigree = canEditPetData
         ? () => setOpenHasPedigreeDialog(true)
         : undefined;
 
-    const editVisualTag = canEditBasicPetdata
+    const editVisualTag = canEditPetData
         ? () => setOpenVisualTagDialog(true)
         : undefined;
 
-    const editLastWeight = canEditBasicPetdata
+    const editLastWeight = canEditPetData
         ? () => setOpenLastWeightDialog(true)
         : undefined;
 
     const addPetContact = canAddContacts
         ? () => setOpenAddContactDialog(true)
         : undefined;
-    // ------------------------- THIS IS PART 2 ---------------------------
 
     return (
         <div>
             <div className="mb-8 flex items-start gap-8">
-                {canEditBasicPetdata ? (
+                {canEditPetData ? (
                     <GlobalButton
                         variant="ghost"
                         onClick={() => console.log("edit photo")}
@@ -619,19 +627,6 @@ export default function PetDataView({
 
             <div className="space-y-6 rounded-xl border border-slate-200 bg-slate-100 p-6 shadow-sm">
                 <Section title="Datos básicos">
-                    {!hasPetSexRegistered && (
-                        <div className="md:col-span-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 shadow-sm">
-                            <p className="font-semibold">
-                                El sexo del paciente no está registrado.
-                            </p>
-
-                            <p className="mt-1 text-amber-800">
-                                Completa este dato para mejorar la ficha
-                                clínica.
-                            </p>
-                        </div>
-                    )}
-
                     <Row label="Nombre" value={pet.name} onEdit={editName} />
 
                     <Row
@@ -640,22 +635,26 @@ export default function PetDataView({
                         onEdit={editSex}
                     />
 
-                    <Row
-                        label="Edad"
-                        value={formatAge(pet.birth_date)}
+                    <GroupedRow
+                        title="Especie / Raza"
+                        items={[
+                            {
+                                label: "Especie",
+                                value: pet.species?.name ?? "—",
+                            },
+                            {
+                                label: "Raza",
+                                value: pet.breed?.name ?? "—",
+                            },
+                        ]}
+                        onEdit={editSpeciesAndBreed}
+                        colSpan={2}
+                    />
+
+                    <BirthDateAgeRow
+                        birthDate={formatBirthDate(pet.birth_date)}
+                        age={formatAge(pet.birth_date)}
                         onEdit={editBirthDate}
-                    />
-
-                    <Row
-                        label="Especie"
-                        value={pet.species.name}
-                        onEdit={editSpecies}
-                    />
-
-                    <Row
-                        label="Raza"
-                        value={pet.breed?.name ?? "—"}
-                        onEdit={editBreed}
                     />
 
                     <Row
@@ -731,8 +730,6 @@ export default function PetDataView({
                         className="md:row-start-3 md:col-start-1"
                     />
                 </Section>
-
-                {/* ------------------ THIS IS PART 3 ----------------------- */}
 
                 <Section title="Identificación electrónica">
                     <Row
@@ -864,6 +861,9 @@ export default function PetDataView({
                     emptyAsNull={false}
                     showCounter={true}
                     validateValue={null}
+                    showChangeReason={true}
+                    requireChangeReason={false}
+                    changeReasonPlaceholder="Ej: Corrección ortográfica del nombre registrado."
                 />
             )}
 
@@ -880,6 +880,10 @@ export default function PetDataView({
                     description="Selecciona el Sexo de la Mascota."
                     options={PET_SEX_OPTIONS}
                     allowEmpty={false}
+                    emptyAsNull={false}
+                    showChangeReason={true}
+                    requireChangeReason={false}
+                    changeReasonPlaceholder="Ej: Corrección del sexo registrado inicialmente."
                 />
             )}
 
@@ -898,10 +902,11 @@ export default function PetDataView({
                     max={new Date().toISOString().slice(0, 10)}
                     validateValue={validateBirthDate}
                     showAgePreview
+                    showChangeReason={true}
+                    requireChangeReason={false}
+                    changeReasonPlaceholder="Ej: Corrección de la fecha de nacimiento registrada inicialmente."
                 />
             )}
-
-            {/* -------------------- THIS IS PART 4 ------------------------------- */}
 
             {pet && (
                 <EditPetSpeciesAndBreedDialog
@@ -909,15 +914,6 @@ export default function PetDataView({
                     centerId={centerId}
                     pet={pet}
                     onClose={() => setOpenSpeciesDialog(false)}
-                />
-            )}
-
-            {pet && (
-                <EditPetSpeciesAndBreedDialog
-                    open={openBreedDialog}
-                    centerId={centerId}
-                    pet={pet}
-                    onClose={() => setOpenBreedDialog(false)}
                 />
             )}
 
@@ -952,6 +948,9 @@ export default function PetDataView({
                     allowEmpty={true}
                     emptyOptionLabel="Sin especificar"
                     emptyAsNull={true}
+                    showChangeReason={true}
+                    requireChangeReason={false}
+                    changeReasonPlaceholder="Ej: Corrección del tamaño registrado inicialmente."
                 />
             )}
 
@@ -1120,8 +1119,6 @@ export default function PetDataView({
                 />
             )}
 
-            {/* ------------------- THIS IS PART 5 ----------------- */}
-
             {pet && (
                 <EditPetTextFieldDialog
                     open={openMicrochipCodeDialog}
@@ -1157,10 +1154,11 @@ export default function PetDataView({
                     emptyAsNull={true}
                     max={new Date().toISOString().slice(0, 10)}
                     validateValue={validateMicrochipDate}
+                    showChangeReason={true}
+                    requireChangeReason={false}
+                    changeReasonPlaceholder="Ej: Corrección de la fecha de implantación del microchip."
                 />
             )}
-
-            {/* -------------------- THIS IS PART 4 -------------------- */}
 
             {pet && (
                 <EditPetTextFieldDialog
@@ -1270,6 +1268,82 @@ function Section({title, children}: {title: string; children: ReactNode}) {
     );
 }
 
+type BirthDateAgeRowProps = {
+    birthDate: string;
+    age: string;
+    onEdit?: () => void;
+};
+
+function BirthDateAgeRow({birthDate, age, onEdit}: BirthDateAgeRowProps) {
+    const isEditable = typeof onEdit === "function";
+    const birthDateIsEmpty = birthDate.trim() === "—";
+    const ageIsEmpty = age.trim() === "—";
+
+    return (
+        <div className="h-full rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm transition-colors hover:border-slate-300 md:col-span-2">
+            <div className="flex h-full flex-col gap-2">
+                <div className="flex items-start justify-between gap-3">
+                    <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                        Fecha de nacimiento / Edad
+                    </span>
+
+                    {isEditable && (
+                        <GlobalButton
+                            variant="ghost"
+                            size="xs"
+                            onClick={onEdit}
+                            className={clsx(
+                                "flex h-7 w-7 shrink-0 items-center justify-center rounded-lg p-0",
+                                "bg-white shadow-sm ring-1 ring-slate-200",
+                                "transition-all duration-150",
+                                "group-hover:shadow-md group-hover:ring-slate-300",
+                            )}
+                        >
+                            ✏️
+                        </GlobalButton>
+                    )}
+                </div>
+
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <div>
+                        <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                            Fecha de nacimiento
+                        </p>
+
+                        <p
+                            className={clsx(
+                                "whitespace-pre-wrap break-words text-[15px] leading-6",
+                                birthDateIsEmpty
+                                    ? "font-normal text-slate-400"
+                                    : "font-medium text-slate-900",
+                            )}
+                        >
+                            {birthDate}
+                        </p>
+                    </div>
+
+                    <div>
+                        <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                            Edad
+                        </p>
+
+                        <p
+                            className={clsx(
+                                "whitespace-pre-wrap break-words text-[15px] leading-6",
+                                ageIsEmpty
+                                    ? "font-normal text-slate-400"
+                                    : "font-medium text-slate-900",
+                            )}
+                        >
+                            {age}
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+}
+
 type RowProps = {
     label: string;
     value: string;
@@ -1339,6 +1413,99 @@ function Row({
                     )}
                 >
                     {value}
+                </div>
+            </div>
+        </div>
+    );
+}
+
+type GroupedRowItem = {
+    label: string;
+    value: string;
+};
+
+type GroupedRowProps = {
+    title: string;
+    items: GroupedRowItem[];
+    colSpan?: 1 | 2 | 3 | 4;
+    onEdit?: () => void;
+    editDisabled?: boolean;
+    editDisabledTitle?: string;
+    className?: string;
+};
+
+function GroupedRow({
+    title,
+    items,
+    colSpan = 1,
+    onEdit,
+    editDisabled = false,
+    editDisabledTitle,
+    className,
+}: GroupedRowProps) {
+    const isEditable = typeof onEdit === "function";
+    const showEditButton = isEditable || editDisabled;
+
+    const containerClass = clsx(
+        "h-full rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm transition-colors",
+        "hover:border-slate-300",
+        colSpan === 2 && "md:col-span-2",
+        colSpan === 3 && "md:col-span-3",
+        colSpan === 4 && "md:col-span-4",
+        className,
+    );
+
+    return (
+        <div className={containerClass}>
+            <div className="flex h-full flex-col gap-3">
+                <div className="flex items-start justify-between gap-3">
+                    <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                        {title}
+                    </span>
+
+                    {showEditButton && (
+                        <GlobalButton
+                            variant="ghost"
+                            size="xs"
+                            onClick={isEditable ? onEdit : undefined}
+                            disabled={!isEditable}
+                            title={!isEditable ? editDisabledTitle : undefined}
+                            className={clsx(
+                                "flex h-7 w-7 shrink-0 items-center justify-center rounded-lg p-0",
+                                "bg-white shadow-sm ring-1 ring-slate-200",
+                                "transition-all duration-150",
+                                "group-hover:shadow-md group-hover:ring-slate-300",
+                                !isEditable && "cursor-not-allowed opacity-40",
+                            )}
+                        >
+                            ✏️
+                        </GlobalButton>
+                    )}
+                </div>
+
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    {items.map((item) => {
+                        const isEmpty = item.value.trim() === "—";
+
+                        return (
+                            <div key={item.label}>
+                                <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                                    {item.label}
+                                </div>
+
+                                <div
+                                    className={clsx(
+                                        "mt-1 whitespace-pre-wrap break-words text-[15px] leading-6",
+                                        isEmpty
+                                            ? "font-normal text-slate-400"
+                                            : "font-medium text-slate-900",
+                                    )}
+                                >
+                                    {item.value}
+                                </div>
+                            </div>
+                        );
+                    })}
                 </div>
             </div>
         </div>

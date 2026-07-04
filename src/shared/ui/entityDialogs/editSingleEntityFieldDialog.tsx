@@ -2,19 +2,12 @@
 
 "use client";
 
-import {ReactNode, useEffect, useState} from "react";
-import {
-    DefaultValues,
-    FieldValues,
-    Resolver,
-    SubmitHandler,
-    UseFormReturn,
-} from "react-hook-form";
+import {type ReactNode, useEffect, useState} from "react";
+import {DefaultValues, FieldValues, SubmitHandler} from "react-hook-form";
 
 import FormDialog from "@/shared/ui/forms/formDialog";
-import SingleFieldSectionLayout from "../forms/fields/singleFieldSectionLayout";
 
-type DialogSize = "sm" | "md" | "lg" | "xl" | "full";
+type DialogSize = "sm" | "md" | "lg" | "xl";
 
 type Props<TEntity, TFormValues extends FieldValues, TPayload> = {
     open: boolean;
@@ -26,8 +19,19 @@ type Props<TEntity, TFormValues extends FieldValues, TPayload> = {
     defaultValues: DefaultValues<TFormValues>;
 
     children: ReactNode;
-
     sidePanel?: ReactNode;
+
+    /**
+     * Use dialogSize in the single-field dialog API.
+     * It is forwarded to FormDialog as `size`.
+     */
+    dialogSize?: DialogSize;
+
+    /**
+     * Kept only so older/newer callers using `size` also work.
+     * Prefer `dialogSize` when using EditSingleEntityFieldDialog.
+     */
+    size?: DialogSize;
 
     onClose: () => void;
 
@@ -42,13 +46,6 @@ type Props<TEntity, TFormValues extends FieldValues, TPayload> = {
 
     submitLabel?: string;
     cancelLabel?: string;
-    size?: DialogSize;
-
-    methods?: UseFormReturn<TFormValues>;
-    resolver?: Resolver<TFormValues>;
-
-    closeOnOverlayClick?: boolean;
-    disableEscape?: boolean;
 
     getErrorMessage?: (error: unknown) => string;
 };
@@ -65,20 +62,19 @@ export default function EditSingleEntityFieldDialog<
     defaultValues,
     children,
     sidePanel,
+    dialogSize,
+    size,
     onClose,
     buildPayload,
     updateEntity,
     onSaved,
     submitLabel = "Guardar",
     cancelLabel = "Cancelar",
-    size = "xl",
-    methods,
-    resolver,
-    closeOnOverlayClick = false,
-    disableEscape = false,
     getErrorMessage,
 }: Props<TEntity, TFormValues, TPayload>) {
     const [submitError, setSubmitError] = useState<string | null>(null);
+
+    const resolvedDialogSize = dialogSize ?? size ?? "lg";
 
     useEffect(() => {
         if (open) {
@@ -108,6 +104,24 @@ export default function EditSingleEntityFieldDialog<
         }
     };
 
+    const formContent = (
+        <section className="space-y-4">
+            <div>
+                <h3 className="text-sm font-semibold text-slate-800">
+                    {sectionTitle}
+                </h3>
+            </div>
+
+            {children}
+
+            {submitError ? (
+                <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                    {submitError}
+                </div>
+            ) : null}
+        </section>
+    );
+
     return (
         <FormDialog<TFormValues>
             open={open}
@@ -115,21 +129,24 @@ export default function EditSingleEntityFieldDialog<
             defaultValues={defaultValues}
             onSubmit={handleSubmit}
             onClose={onClose}
+            size={resolvedDialogSize}
             submitLabel={submitLabel}
             cancelLabel={cancelLabel}
-            size={size}
-            methods={methods}
-            resolver={resolver}
-            closeOnOverlayClick={closeOnOverlayClick}
-            disableEscape={disableEscape}
+            closeOnOverlayClick={false}
         >
-            <SingleFieldSectionLayout
-                sectionTitle={sectionTitle}
-                submitError={submitError}
-                sidePanel={sidePanel}
-            >
-                {children}
-            </SingleFieldSectionLayout>
+            {sidePanel ? (
+                <div className="grid grid-cols-1 gap-6 md:grid-cols-[188px_minmax(0,1fr)]">
+                    <aside className="min-w-0">{sidePanel}</aside>
+
+                    <div className="min-w-0 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                        {formContent}
+                    </div>
+                </div>
+            ) : (
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                    {formContent}
+                </div>
+            )}
         </FormDialog>
     );
 }
