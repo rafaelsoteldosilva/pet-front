@@ -14,8 +14,9 @@ export async function createPetApi({
     centerId,
     payload,
 }: CreatePetApiArgs): Promise<PetDataInterface> {
+    console.log("createPet:: payload = ", payload);
     const response = await axiosInstance.post<PetDataInterface>(
-        `/pets/${centerId}/create/`,
+        `/pet/${centerId}/create/`,
         payload,
     );
 

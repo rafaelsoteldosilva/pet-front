@@ -109,6 +109,20 @@ function getSpeciesAndBreedSubmitError(error: unknown): string {
     return "No se pudo actualizar la especie y la raza.";
 }
 
+function normalizeIdValue(value: unknown): string {
+    if (value === null || value === undefined) {
+        return "";
+    }
+
+    const normalized = String(value).trim();
+
+    if (!normalized || normalized === "0") {
+        return "";
+    }
+
+    return normalized;
+}
+
 export default function EditPetSpeciesAndBreedDialog({
     open,
     centerId,
@@ -146,7 +160,7 @@ export default function EditPetSpeciesAndBreedDialog({
             loadedCenterId !== centerId || speciesAndBreedsResults.length === 0;
 
         if (shouldLoadSpeciesAndBreeds) {
-            loadAllowedSpeciesAndBreedsSlice(centerId);
+            void loadAllowedSpeciesAndBreedsSlice(centerId);
         }
     }, [
         open,
@@ -156,9 +170,27 @@ export default function EditPetSpeciesAndBreedDialog({
         loadAllowedSpeciesAndBreedsSlice,
     ]);
 
+    const currentSpeciesId = normalizeIdValue(pet.species?.id);
+    const currentBreedId = normalizeIdValue(pet.breed?.id);
+
+    const catalogReadyKey =
+        loadedCenterId === centerId && speciesAndBreedsResults.length > 0
+            ? "catalog-ready"
+            : "catalog-loading";
+
+    const dialogKey = [
+        pet.id,
+        open ? "open" : "closed",
+        centerId,
+        currentSpeciesId,
+        currentBreedId,
+        catalogReadyKey,
+        speciesAndBreedsResults.length,
+    ].join("-");
+
     const defaultValues: DefaultValues<FormValues> = {
-        species_id: pet.species?.id ? String(pet.species.id) : "",
-        breed_id: pet.breed?.id ? String(pet.breed.id) : "",
+        species_id: currentSpeciesId,
+        breed_id: currentBreedId,
         reason: "",
     };
 
@@ -168,6 +200,7 @@ export default function EditPetSpeciesAndBreedDialog({
             FormValues,
             UpdatePayload
         >
+            key={dialogKey}
             open={open}
             title={title}
             sectionTitle={sectionTitle}
@@ -308,7 +341,7 @@ function SpeciesAndBreedFields({
         return [
             {
                 value: "",
-                label: "Selecciona la especie del paciente",
+                label: "Seleccione una opción",
             },
             ...speciesAndBreedsResults.map((item) => ({
                 value: String(item.species.id),
@@ -322,7 +355,7 @@ function SpeciesAndBreedFields({
             return [
                 {
                     value: "",
-                    label: "Selecciona primero una especie",
+                    label: "Seleccione primero una especie",
                 },
             ];
         }
@@ -330,7 +363,7 @@ function SpeciesAndBreedFields({
         return [
             {
                 value: "",
-                label: "Selecciona la raza del paciente",
+                label: "Seleccione una opción",
             },
             ...selectedSpeciesGroup.breeds.map((breed) => ({
                 value: String(breed.id),

@@ -23,11 +23,10 @@ type SharedPatchablePetKeys =
     | "microchip_date"
     | "microchip_body_region"
     | "clinical_observations"
-    | "internal_notes";
+    | "internal_notes"
+    | "last_attending_vet_external_name";
 
-type SharedBasicPetPatch = Partial<
-    Pick<PetDataInterface, SharedPatchablePetKeys>
->;
+type SharedPetPatch = Partial<Pick<PetDataInterface, SharedPatchablePetKeys>>;
 
 type RelationIdPatch = {
     species_id?: string;
@@ -40,7 +39,7 @@ type AuditReasonPatch = {
     reason?: string;
 };
 
-export type UpdatePetDataPayload = SharedBasicPetPatch &
+export type UpdatePetDataPayload = SharedPetPatch &
     RelationIdPatch &
     AuditReasonPatch;
 
@@ -75,6 +74,32 @@ export async function updatePetDataApi({
         payload.last_attending_vet_id = payload.last_attending_vet_id ?? null;
     }
 
+    if (
+        "last_attending_vet_external_name" in payload &&
+        typeof payload.last_attending_vet_external_name === "string"
+    ) {
+        const trimmedExternalVetName =
+            payload.last_attending_vet_external_name.trim();
+
+        payload.last_attending_vet_external_name =
+            trimmedExternalVetName || null;
+    }
+
+    if (
+        payload.last_attending_vet_external_name &&
+        payload.last_attending_vet_external_name.trim()
+    ) {
+        payload.last_attending_vet_id = null;
+    }
+
+    if (
+        "last_attending_vet_id" in payload &&
+        payload.last_attending_vet_id !== null &&
+        payload.last_attending_vet_id !== undefined
+    ) {
+        payload.last_attending_vet_external_name = null;
+    }
+
     if ("reason" in payload && typeof payload.reason === "string") {
         const trimmedReason = payload.reason.trim();
 
@@ -84,8 +109,6 @@ export async function updatePetDataApi({
             delete payload.reason;
         }
     }
-
-    console.log("updatePetDataApi:: payload = ", payload);
 
     const response = await axiosInstance.patch<
         PetDataInterface,

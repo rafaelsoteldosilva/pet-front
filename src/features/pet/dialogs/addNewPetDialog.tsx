@@ -1146,8 +1146,8 @@ export default function AddNewPetDialog({
                             <FormCard>
                                 <TextInputSection
                                     name="visual_tag"
-                                    label="Placa, collar, etiqueta"
-                                    placeholder="Ej: placa azul"
+                                    label="Inscripción en Placa, collar, etiqueta"
+                                    placeholder="Ej: Toby"
                                     maxLength={20}
                                 />
                             </FormCard>

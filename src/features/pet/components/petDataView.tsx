@@ -48,6 +48,8 @@ import {
 import {hasActivePrimaryPetContact} from "../rules/petContactPrimaryRules";
 import {useCenterVetsSlice} from "@/hooks/center/useCenterVetsSlice";
 import EditPetLastAttendingVeterinarianDialog from "../dialogs/editPetLastAttendingVeterinarianDialog";
+import EditPetPedigreeDialog from "../dialogs/editPetPedigreeDialog";
+import EditPetMicrochipDialog from "../dialogs/editPetMicrochipDialog";
 
 /* ======================================================
    Utils
@@ -292,24 +294,15 @@ export default function PetDataView({
     const [openSizeDialog, setOpenSizeDialog] = useState(false);
 
     const [openSterilizedDialog, setOpenSterilizedDialog] = useState(false);
-    const [openHasPedigreeDialog, setOpenHasPedigreeDialog] = useState(false);
-    const [openHasMicrochipDialog, setOpenHasMicrochipDialog] = useState(false);
+    const [openPedigreeDialog, setOpenPedigreeDialog] = useState(false);
+    const [openMicrochipDialog, setOpenMicrochipDialog] = useState(false);
 
     const [openLastWeightDialog, setOpenLastWeightDialog] = useState(false);
     const [openVisualTagDialog, setOpenVisualTagDialog] = useState(false);
-    const [openPedigreeRegistryDialog, setOpenPedigreeRegistryDialog] =
-        useState(false);
     const [
         openVisualIdentificationOrTatooDescriptionDialog,
         setOpenVisualIdentificationOrTatooDescriptionDialog,
     ] = useState(false);
-
-    const [openMicrochipCodeDialog, setOpenMicrochipCodeDialog] =
-        useState(false);
-    const [openMicrochipDateDialog, setOpenMicrochipDateDialog] =
-        useState(false);
-    const [openMicrochipRegionDialog, setOpenMicrochipRegionDialog] =
-        useState(false);
 
     const [openClinicalObservationsDialog, setOpenClinicalObservationsDialog] =
         useState(false);
@@ -349,27 +342,6 @@ export default function PetDataView({
         : [];
 
     const hasActivePrimaryContact = hasActivePrimaryPetContact(petContactLinks);
-
-    const hasPedigreeRegistryValue =
-        typeof pet.pedigree_registry === "string" &&
-        pet.pedigree_registry.trim() !== "";
-
-    const hasMicrochipCodeValue =
-        typeof pet.microchip_code === "string" &&
-        pet.microchip_code.trim() !== "";
-
-    const hasMicrochipDateValue =
-        typeof pet.microchip_date === "string" &&
-        pet.microchip_date.trim() !== "";
-
-    const hasMicrochipRegionValue =
-        typeof pet.microchip_body_region === "string" &&
-        pet.microchip_body_region.trim() !== "";
-
-    const hasAnyMicrochipValue =
-        hasMicrochipCodeValue ||
-        hasMicrochipDateValue ||
-        hasMicrochipRegionValue;
 
     const clinicalRecordStatus = normalizePetRecordStatus(
         pet.clinical_record_status,
@@ -467,40 +439,12 @@ export default function PetDataView({
         ? () => setOpenSpeciesDialog(true)
         : undefined;
 
-    const canEditPedigreeRegistry = canEditPetData && pet.has_pedigree;
-    const disablePedigreeRegistryEdit = canEditPetData && !pet.has_pedigree;
-
-    const canEditMicrochipCode = canEditPetData && pet.has_microchip;
-    const disableMicrochipCodeEdit = canEditPetData && !pet.has_microchip;
-
-    const canEditMicrochipDate = canEditPetData && pet.has_microchip;
-    const disableMicrochipDateEdit = canEditPetData && !pet.has_microchip;
-
-    const canEditMicrochipRegion = canEditPetData && pet.has_microchip;
-    const disableMicrochipRegionEdit = canEditPetData && !pet.has_microchip;
-
-    const editPedigreeRegistry = canEditPedigreeRegistry
-        ? () => setOpenPedigreeRegistryDialog(true)
-        : undefined;
-
     const editVisualIdentificationOrTatooDescription = canEditPetData
         ? () => setOpenVisualIdentificationOrTatooDescriptionDialog(true)
         : undefined;
 
-    const editHasMicrochip = canEditPetData
-        ? () => setOpenHasMicrochipDialog(true)
-        : undefined;
-
-    const editMicrochipCode = canEditMicrochipCode
-        ? () => setOpenMicrochipCodeDialog(true)
-        : undefined;
-
-    const editMicrochipDate = canEditMicrochipDate
-        ? () => setOpenMicrochipDateDialog(true)
-        : undefined;
-
-    const editMicrochipRegion = canEditMicrochipRegion
-        ? () => setOpenMicrochipRegionDialog(true)
+    const editMicrochip = canEditPetData
+        ? () => setOpenMicrochipDialog(true)
         : undefined;
 
     const editClinicalObservations = canEditPetData
@@ -531,8 +475,8 @@ export default function PetDataView({
         ? () => setOpenSterilizedDialog(true)
         : undefined;
 
-    const editHasPedigree = canEditPetData
-        ? () => setOpenHasPedigreeDialog(true)
+    const editPedigree = canEditPetData
+        ? () => setOpenPedigreeDialog(true)
         : undefined;
 
     const editVisualTag = canEditPetData
@@ -702,21 +646,21 @@ export default function PetDataView({
                         colSpan={2}
                     />
 
-                    <Row
-                        label="Pedigrí"
-                        value={pet.has_pedigree ? "Sí" : "No"}
-                        onEdit={editHasPedigree}
+                    <GroupedRow
+                        title="Pedigrí / Registro de Pedigrí"
+                        items={[
+                            {
+                                label: "Pedigrí",
+                                value: pet.has_pedigree ? "Sí" : "No",
+                            },
+                            {
+                                label: "Registro de Pedigrí",
+                                value: pet.pedigree_registry ?? "—",
+                            },
+                        ]}
+                        onEdit={editPedigree}
+                        colSpan={4}
                         className="md:row-start-2 md:col-start-1"
-                    />
-
-                    <Row
-                        label="Registro de pedigrí"
-                        value={pet.pedigree_registry ?? "—"}
-                        onEdit={editPedigreeRegistry}
-                        editDisabled={disablePedigreeRegistryEdit}
-                        editDisabledTitle="Primero activa 'Pedigrí' para editar este campo."
-                        colSpan={2}
-                        className="md:row-start-2 md:col-start-2"
                     />
 
                     <Row
@@ -732,34 +676,28 @@ export default function PetDataView({
                 </Section>
 
                 <Section title="Identificación electrónica">
-                    <Row
-                        label="Microchip"
-                        value={pet.has_microchip ? "Sí" : "No"}
-                        onEdit={editHasMicrochip}
-                    />
-
-                    <Row
-                        label="Código microchip"
-                        value={pet.microchip_code ?? "—"}
-                        onEdit={editMicrochipCode}
-                        editDisabled={disableMicrochipCodeEdit}
-                        editDisabledTitle="Primero activa 'Microchip' para editar este campo."
-                    />
-
-                    <Row
-                        label="Fecha implantación"
-                        value={pet.microchip_date ?? "—"}
-                        onEdit={editMicrochipDate}
-                        editDisabled={disableMicrochipDateEdit}
-                        editDisabledTitle="Primero activa 'Microchip' para editar este campo."
-                    />
-
-                    <Row
-                        label="Ubicación corporal"
-                        value={pet.microchip_body_region ?? "—"}
-                        onEdit={editMicrochipRegion}
-                        editDisabled={disableMicrochipRegionEdit}
-                        editDisabledTitle="Primero activa 'Microchip' para editar este campo."
+                    <GroupedRow
+                        title="Microchip / Datos del Microchip"
+                        items={[
+                            {
+                                label: "Microchip",
+                                value: pet.has_microchip ? "Sí" : "No",
+                            },
+                            {
+                                label: "Código Microchip",
+                                value: pet.microchip_code ?? "—",
+                            },
+                            {
+                                label: "Fecha Implantación",
+                                value: pet.microchip_date ?? "—",
+                            },
+                            {
+                                label: "Ubicación Corporal",
+                                value: pet.microchip_body_region ?? "—",
+                            },
+                        ]}
+                        onEdit={editMicrochip}
+                        colSpan={4}
                     />
                 </Section>
 
@@ -1038,41 +976,15 @@ export default function PetDataView({
             )}
 
             {pet && (
-                <EditPetBooleanFieldDialog
-                    open={openHasPedigreeDialog}
+                <EditPetPedigreeDialog
+                    open={openPedigreeDialog}
                     centerId={centerId}
                     pet={pet}
-                    onClose={() => setOpenHasPedigreeDialog(false)}
-                    title="Editar pedigrí"
-                    sectionTitle="Pedigrí de la mascota"
-                    fieldName="has_pedigree"
-                    label="¿Tiene pedigrí?"
-                    description="Indica si la mascota posee pedigrí."
-                    trueLabel="Sí"
-                    falseLabel="No"
-                    disableFalse={hasPedigreeRegistryValue}
-                    disableFalseReason="No puedes desactivar el pedigrí mientras exista un registro de pedigrí. Borra primero ese valor."
-                />
-            )}
-
-            {pet && (
-                <EditPetTextFieldDialog
-                    open={openPedigreeRegistryDialog}
-                    centerId={centerId}
-                    pet={pet}
-                    onClose={() => setOpenPedigreeRegistryDialog(false)}
-                    title="Editar Registro de Pedigrí"
-                    sectionTitle="Registro de Pedigrí de la Mascota"
-                    fieldName="pedigree_registry"
-                    label="Registro de Pedigrí"
-                    description="Ingresa el registro de Pedigrí de la Mascota."
-                    placeholder="Ej: ABC-12345"
-                    maxLength={50}
-                    multiline={false}
-                    rows={1}
-                    emptyAsNull={true}
-                    showCounter={true}
-                    validateValue={null}
+                    onClose={() => setOpenPedigreeDialog(false)}
+                    onSaved={(updatedPet) => {
+                        setPetDataSlice(updatedPet);
+                        setOpenPedigreeDialog(false);
+                    }}
                 />
             )}
 
@@ -1102,85 +1014,17 @@ export default function PetDataView({
             )}
 
             {pet && (
-                <EditPetBooleanFieldDialog
-                    open={openHasMicrochipDialog}
+                <EditPetMicrochipDialog
+                    open={openMicrochipDialog}
                     centerId={centerId}
                     pet={pet}
-                    onClose={() => setOpenHasMicrochipDialog(false)}
-                    title="Editar Tiene Microchip"
-                    sectionTitle="Tiene Microchip"
-                    fieldName="has_microchip"
-                    label="Tiene microchip"
-                    description="Indica si la mascota tiene microchip o no."
-                    trueLabel="Sí"
-                    falseLabel="No"
-                    disableFalse={hasAnyMicrochipValue}
-                    disableFalseReason="No puedes establecer que no tiene microchip mientras exista código de microchip, fecha de implantación o región de implantación. Borra primero esos valores."
+                    onClose={() => setOpenMicrochipDialog(false)}
+                    onSaved={(updatedPet) => {
+                        setPetDataSlice(updatedPet);
+                        setOpenMicrochipDialog(false);
+                    }}
                 />
             )}
-
-            {pet && (
-                <EditPetTextFieldDialog
-                    open={openMicrochipCodeDialog}
-                    centerId={centerId}
-                    pet={pet}
-                    onClose={() => setOpenMicrochipCodeDialog(false)}
-                    title="Editar Código Microchip"
-                    sectionTitle="Código Microchip"
-                    fieldName="microchip_code"
-                    label="Código Microchip"
-                    description="Ingresa Código Microchip de la Mascota."
-                    placeholder="Ej: 123456789012345"
-                    maxLength={30}
-                    multiline={false}
-                    rows={1}
-                    emptyAsNull={true}
-                    showCounter={false}
-                    validateValue={validateMicrochipCode}
-                />
-            )}
-
-            {pet && (
-                <EditPetDateFieldDialog
-                    open={openMicrochipDateDialog}
-                    centerId={centerId}
-                    pet={pet}
-                    onClose={() => setOpenMicrochipDateDialog(false)}
-                    title="Editar Fecha de Implantación"
-                    sectionTitle="Fecha de Implantación del Microchip"
-                    fieldName="microchip_date"
-                    label="Fecha de implantación"
-                    description="Selecciona la fecha de implantación del microchip."
-                    emptyAsNull={true}
-                    max={new Date().toISOString().slice(0, 10)}
-                    validateValue={validateMicrochipDate}
-                    showChangeReason={true}
-                    requireChangeReason={false}
-                    changeReasonPlaceholder="Ej: Corrección de la fecha de implantación del microchip."
-                />
-            )}
-
-            {pet && (
-                <EditPetTextFieldDialog
-                    open={openMicrochipRegionDialog}
-                    centerId={centerId}
-                    pet={pet}
-                    onClose={() => setOpenMicrochipRegionDialog(false)}
-                    title="Editar Ubicación Corporal de la Implantación"
-                    sectionTitle="Ubicación Corporal de la Implantación"
-                    fieldName="microchip_body_region"
-                    label="Ubicación Corporal de la Implantación"
-                    description="Indica en qué parte del cuerpo fue implantado el microchip."
-                    placeholder="Ej: Del lado izquierdo del cuello"
-                    maxLength={80}
-                    multiline={false}
-                    rows={1}
-                    emptyAsNull={true}
-                    showCounter={false}
-                    validateValue={null}
-                />
-            )}
-
             {pet && (
                 <EditPetTextFieldDialog
                     open={openClinicalObservationsDialog}

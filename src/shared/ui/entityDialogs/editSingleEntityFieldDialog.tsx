@@ -92,11 +92,6 @@ export default function EditSingleEntityFieldDialog<
             onSaved?.(updatedEntity);
             onClose();
         } catch (error) {
-            console.error(
-                "EditSingleEntityFieldDialog:: update failed:: ",
-                error,
-            );
-
             const message =
                 getErrorMessage?.(error) ?? "No se pudo actualizar el campo.";
 

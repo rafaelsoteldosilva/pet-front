@@ -70,7 +70,7 @@ export const PET_CONTACT_ROLE_VALUES = [
 export type CenterContactSummaryInterface = CenterContactInterface;
 
 export interface PetContactLinkInterface {
-    id: number; // Pet_Contact_Link id, not center_Contact id.
+    id: number;
 
     role: PetContactRole;
     role_label: string;
@@ -124,6 +124,8 @@ export interface PetDataInterface {
 
     last_attending_vet: CenterStaffMembershipInterface | null;
     last_attending_vet_id: number | null;
+    last_attending_vet_external_name: string | null;
+
     reference: string | null;
 
     has_pedigree: boolean;

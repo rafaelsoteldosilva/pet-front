@@ -12,6 +12,11 @@ import {
     Dialog,
     DialogActions,
     DialogContent,
+    FormControl,
+    FormControlLabel,
+    FormLabel,
+    Radio,
+    RadioGroup,
     Stack,
     TextField,
     Typography,
@@ -34,6 +39,17 @@ type VeterinarianOption = {
     first_name?: string | null;
     last_name?: string | null;
     email?: string | null;
+};
+
+type VeterinarianSource = "center" | "external";
+
+type PetDataWithExternalVeterinarian = PetDataInterface & {
+    last_attending_vet_external_name?: string | null;
+};
+
+type UpdatePetVeterinarianPayload = {
+    last_attending_vet_id: number | null;
+    last_attending_vet_external_name: string | null;
 };
 
 type EditPetLastAttendingVeterinarianDialogProps = {
@@ -83,6 +99,21 @@ function getVeterinarianLabel(veterinarian: VeterinarianOption): string {
     return `Veterinario #${veterinarian.id}`;
 }
 
+function getInitialVeterinarianSource(
+    currentVeterinarian: VeterinarianOption | null,
+    currentExternalVeterinarianName: string,
+): VeterinarianSource {
+    if (currentVeterinarian) {
+        return "center";
+    }
+
+    if (currentExternalVeterinarianName) {
+        return "external";
+    }
+
+    return "center";
+}
+
 export default function EditPetLastAttendingVeterinarianDialog({
     open,
     centerId,
@@ -93,8 +124,19 @@ export default function EditPetLastAttendingVeterinarianDialog({
     onClose,
     onSaved,
 }: EditPetLastAttendingVeterinarianDialogProps) {
+    const petWithExternalVeterinarian = pet as PetDataWithExternalVeterinarian;
+
     const currentVeterinarian: VeterinarianOption | null =
         pet.last_attending_vet ?? null;
+
+    const currentExternalVeterinarianName =
+        petWithExternalVeterinarian.last_attending_vet_external_name?.trim() ??
+        "";
+
+    const currentVeterinarianSource = getInitialVeterinarianSource(
+        currentVeterinarian,
+        currentExternalVeterinarianName,
+    );
 
     const options = useMemo<VeterinarianOption[]>(() => {
         if (!currentVeterinarian) {
@@ -112,29 +154,64 @@ export default function EditPetLastAttendingVeterinarianDialog({
         return [currentVeterinarian, ...veterinarianOptions];
     }, [currentVeterinarian, veterinarianOptions]);
 
+    const [veterinarianSource, setVeterinarianSource] =
+        useState<VeterinarianSource>(currentVeterinarianSource);
+
     const [selectedVeterinarian, setSelectedVeterinarian] =
         useState<VeterinarianOption | null>(currentVeterinarian);
+
+    const [externalVeterinarianName, setExternalVeterinarianName] = useState(
+        currentExternalVeterinarianName,
+    );
 
     const [isSaving, setIsSaving] = useState(false);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
     const currentVeterinarianId = currentVeterinarian?.id ?? null;
     const selectedVeterinarianId = selectedVeterinarian?.id ?? null;
+    const normalizedExternalVeterinarianName = externalVeterinarianName.trim();
+
+    const currentComparableValue =
+        currentVeterinarianSource === "center"
+            ? `center:${currentVeterinarianId ?? ""}`
+            : `external:${currentExternalVeterinarianName}`;
+
+    const selectedComparableValue =
+        veterinarianSource === "center"
+            ? `center:${selectedVeterinarianId ?? ""}`
+            : `external:${normalizedExternalVeterinarianName}`;
 
     const hasVeterinarianChanged =
-        currentVeterinarianId !== selectedVeterinarianId;
+        currentComparableValue !== selectedComparableValue;
 
-    const isSaveDisabled = isSaving || !hasVeterinarianChanged;
+    const isCenterVeterinarianInvalid =
+        veterinarianSource === "center" && selectedVeterinarianId === null;
+
+    const isExternalVeterinarianInvalid =
+        veterinarianSource === "external" &&
+        normalizedExternalVeterinarianName.length === 0;
+
+    const isFormInvalid =
+        isCenterVeterinarianInvalid || isExternalVeterinarianInvalid;
+
+    const isSaveDisabled = isSaving || isFormInvalid || !hasVeterinarianChanged;
 
     useEffect(() => {
         if (!open) {
             return;
         }
 
+        setVeterinarianSource(currentVeterinarianSource);
         setSelectedVeterinarian(currentVeterinarian);
+        setExternalVeterinarianName(currentExternalVeterinarianName);
         setIsSaving(false);
         setErrorMessage(null);
-    }, [open, currentVeterinarian]);
+    }, [
+        open,
+        currentVeterinarianSource,
+        currentVeterinarian,
+        currentExternalVeterinarianName,
+    ]);
 
     function handleClose() {
         if (isSaving) {
@@ -145,21 +222,45 @@ export default function EditPetLastAttendingVeterinarianDialog({
         onClose();
     }
 
+    function handleVeterinarianSourceChange(value: string) {
+        if (value !== "center" && value !== "external") {
+            return;
+        }
+
+        setVeterinarianSource(value);
+        setErrorMessage(null);
+
+        if (value === "external") {
+            setSelectedVeterinarian(null);
+        }
+
+        if (value === "center") {
+            setExternalVeterinarianName("");
+        }
+    }
+
     async function handleSave() {
-        if (isSaving || !hasVeterinarianChanged) {
+        if (isSaving || isFormInvalid || !hasVeterinarianChanged) {
             return;
         }
 
         setIsSaving(true);
         setErrorMessage(null);
 
+        const updateData: UpdatePetVeterinarianPayload = {
+            last_attending_vet_id:
+                veterinarianSource === "center" ? selectedVeterinarianId : null,
+            last_attending_vet_external_name:
+                veterinarianSource === "external"
+                    ? normalizedExternalVeterinarianName
+                    : null,
+        };
+
         try {
             const updatedPet = await updatePetDataApi({
                 centerId,
                 petId: pet.id,
-                data: {
-                    last_attending_vet_id: selectedVeterinarianId,
-                },
+                data: updateData,
             });
 
             onSaved(updatedPet);
@@ -194,7 +295,7 @@ export default function EditPetLastAttendingVeterinarianDialog({
             </Box>
 
             <DialogContent className="bg-white p-0">
-                <Box className="grid min-h-[315px] grid-cols-1 gap-6 p-6 md:grid-cols-[240px_minmax(0,1fr)]">
+                <Box className="grid min-h-[360px] grid-cols-1 gap-6 p-6 md:grid-cols-[240px_minmax(0,1fr)]">
                     <aside>
                         <PetIdentityPanel pet={pet} />
                     </aside>
@@ -208,13 +309,12 @@ export default function EditPetLastAttendingVeterinarianDialog({
                                     </Typography>
 
                                     <Typography className="mt-3 text-sm font-semibold text-slate-800">
-                                        Veterinario tratante anterior
+                                        Origen del veterinario tratante
                                     </Typography>
 
                                     <Typography className="mt-1 text-sm text-slate-500">
-                                        Selecciona el veterinario responsable o
-                                        deja la mascota sin veterinario
-                                        asignado.
+                                        Indica si el veterinario pertenece al
+                                        centro o si fue un veterinario externo.
                                     </Typography>
                                 </Box>
 
@@ -230,35 +330,103 @@ export default function EditPetLastAttendingVeterinarianDialog({
                                     </Alert>
                                 ) : null}
 
-                                <Autocomplete<
-                                    VeterinarianOption,
-                                    false,
-                                    false,
-                                    false
-                                >
-                                    value={selectedVeterinarian}
-                                    options={options}
-                                    loading={isLoadingVeterinarians}
-                                    disabled={isSaving}
-                                    openOnFocus
-                                    onChange={(_, value) => {
-                                        setSelectedVeterinarian(value);
-                                    }}
-                                    getOptionLabel={getVeterinarianLabel}
-                                    isOptionEqualToValue={(option, value) =>
-                                        option.id === value.id
-                                    }
-                                    noOptionsText="No hay veterinarios disponibles"
-                                    loadingText="Cargando veterinarios..."
-                                    clearText="Quitar selección"
-                                    renderInput={(params) => (
-                                        <TextField
-                                            {...params}
-                                            label="Veterinario tratante"
-                                            placeholder="Selecciona un veterinario"
+                                <FormControl disabled={isSaving}>
+                                    <FormLabel className="text-sm font-semibold text-slate-700">
+                                        Tipo de veterinario
+                                    </FormLabel>
+
+                                    <RadioGroup
+                                        row
+                                        value={veterinarianSource}
+                                        onChange={(event) => {
+                                            handleVeterinarianSourceChange(
+                                                event.target.value,
+                                            );
+                                        }}
+                                    >
+                                        <FormControlLabel
+                                            value="center"
+                                            control={<Radio />}
+                                            label="Veterinario del centro"
                                         />
-                                    )}
-                                />
+
+                                        <FormControlLabel
+                                            value="external"
+                                            control={<Radio />}
+                                            label="Veterinario externo"
+                                        />
+                                    </RadioGroup>
+                                </FormControl>
+
+                                {veterinarianSource === "center" ? (
+                                    <Autocomplete<
+                                        VeterinarianOption,
+                                        false,
+                                        false,
+                                        false
+                                    >
+                                        value={selectedVeterinarian}
+                                        options={options}
+                                        loading={isLoadingVeterinarians}
+                                        disabled={isSaving}
+                                        openOnFocus
+                                        onChange={(_, value) => {
+                                            setSelectedVeterinarian(value);
+                                        }}
+                                        getOptionLabel={getVeterinarianLabel}
+                                        isOptionEqualToValue={(option, value) =>
+                                            option.id === value.id
+                                        }
+                                        noOptionsText="No hay veterinarios disponibles"
+                                        loadingText="Cargando veterinarios..."
+                                        clearText="Quitar selección"
+                                        renderInput={(params) => (
+                                            <TextField
+                                                {...params}
+                                                label="Veterinario del centro"
+                                                placeholder="Selecciona un veterinario"
+                                                required
+                                                helperText="Selecciona el veterinario del centro que trató a la mascota."
+                                                InputProps={{
+                                                    ...params.InputProps,
+                                                    endAdornment: (
+                                                        <>
+                                                            {isLoadingVeterinarians ? (
+                                                                <CircularProgress
+                                                                    color="inherit"
+                                                                    size={18}
+                                                                />
+                                                            ) : null}
+
+                                                            {
+                                                                params
+                                                                    .InputProps
+                                                                    .endAdornment
+                                                            }
+                                                        </>
+                                                    ),
+                                                }}
+                                            />
+                                        )}
+                                    />
+                                ) : null}
+
+                                {veterinarianSource === "external" ? (
+                                    <TextField
+                                        label="Nombre del veterinario externo"
+                                        placeholder="Ej: Dra. María González"
+                                        value={externalVeterinarianName}
+                                        disabled={isSaving}
+                                        required
+                                        fullWidth
+                                        helperText="Escribe el nombre del veterinario externo que trató a la mascota."
+                                        onChange={(event) => {
+                                            setExternalVeterinarianName(
+                                                event.target.value,
+                                            );
+                                        }}
+                                    />
+                                ) : null}
                             </Stack>
                         </Box>
                     </section>
