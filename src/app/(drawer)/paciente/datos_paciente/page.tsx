@@ -16,12 +16,12 @@ import PetDataView from "@/features/pet/components/petDataView";
 
 import type {GetAllPetsForCenterResult} from "@/features/pet/types/petTypes";
 
-export default function Patient_BasicDataOfAPatient() {
+export default function Patient_DataOfAPatient() {
     const {setMenuWithMenuId} = useSidebarContext();
 
     const centerId = 1;
 
-    const {pet, loading, loadPetDataSlice} = usePetDataSlice();
+    const {petData, petDataLoading, loadPetDataSlice} = usePetDataSlice();
 
     const [openSelector, setOpenSelector] = useState(false);
     const [openConfirmUsePet, setOpenConfirmUsePet] = useState(false);
@@ -33,17 +33,17 @@ export default function Patient_BasicDataOfAPatient() {
     }, [setMenuWithMenuId]);
 
     useEffect(() => {
-        if (loading) return;
+        if (petDataLoading) return;
         if (hasHandledInitialEntry.current) return;
 
         hasHandledInitialEntry.current = true;
 
-        if (pet) {
+        if (petData) {
             setOpenConfirmUsePet(true);
         } else {
             setOpenSelector(true);
         }
-    }, [loading, pet]);
+    }, [petDataLoading, petData]);
 
     const handlePetSelected = async (
         selectedPet: GetAllPetsForCenterResult,
@@ -75,20 +75,20 @@ export default function Patient_BasicDataOfAPatient() {
                     <span>
                         ¿Quieres seguir usando a{" "}
                         <strong className="font-semibold text-slate-900">
-                            {pet?.name ?? "este paciente"}
+                            {petData?.name ?? "este paciente"}
                         </strong>
-                        {pet?.breed?.name ? (
+                        {petData?.breed?.name ? (
                             <>
                                 ,{" "}
                                 <strong className="font-semibold text-slate-900">
-                                    {pet.breed.name}
+                                    {petData.breed.name}
                                 </strong>
                             </>
                         ) : null}
                         ?
                     </span>
                 }
-                photoUrl={pet?.photo_url}
+                photoUrl={petData?.photo_url}
                 variant="info"
                 acceptLabel="Sí"
                 cancelLabel="No"
@@ -113,7 +113,7 @@ export default function Patient_BasicDataOfAPatient() {
             </ModalDialog>
 
             {/* CONTENT */}
-            {pet ? (
+            {petData ? (
                 <PetDataView enableEdition={false} />
             ) : (
                 <div className="rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">

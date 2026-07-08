@@ -76,6 +76,15 @@ const allPetsForCenterSlice = createSlice({
             state.lastQuery = null;
             state.lastMode = null;
         },
+
+        removePetFromAllPetsForCenterResults(
+            state,
+            action: PayloadAction<number>,
+        ) {
+            const petId = action.payload;
+
+            state.results = state.results.filter((pet) => pet.id !== petId);
+        },
     },
     extraReducers: (builder) => {
         builder
@@ -104,5 +113,9 @@ const allPetsForCenterSlice = createSlice({
 // Exports
 // =====================
 
-export const {clearAllPetsForCenterResults} = allPetsForCenterSlice.actions;
+export const {
+    clearAllPetsForCenterResults,
+    removePetFromAllPetsForCenterResults,
+} = allPetsForCenterSlice.actions;
+
 export default allPetsForCenterSlice.reducer;

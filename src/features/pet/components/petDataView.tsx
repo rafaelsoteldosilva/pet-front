@@ -4,9 +4,11 @@
 
 import {useState, type ReactNode} from "react";
 import Image from "next/image";
+import {useRouter} from "next/navigation";
 import clsx from "clsx";
 
 import {usePetDataSlice} from "@/hooks/pet/usePetDataSlice";
+import {useAllPetsForCenterSlice} from "@/hooks/pet/useAllPetsForCenterSlice";
 import {
     PET_STATUS,
     type PetDataInterface,
@@ -17,6 +19,7 @@ import {canEditPetDataByDraftStatusOnly} from "@/features/pet/rules/canEditPetDa
 import GlobalButton from "@/shared/ui/globalButton";
 
 import {deletePetContactLinkApi} from "@/api/pet/contactLinks/deletePetContactLinkApi";
+import {deleteDraftPetApi} from "@/api/pet/deleteDraftPetApi";
 import {getAxiosErrorMessage} from "@/api/shared/getAxiosErrorMessage";
 
 import EditPetSpeciesAndBreedDialog from "../dialogs/editPetSpeciesAndBreedDialog";
@@ -26,11 +29,7 @@ import {
     PET_SIZE_OPTIONS,
 } from "@/features/pet/constants/optionsForSelectBasedFields";
 
-import {
-    normalizePetRecordStatus,
-    validateMicrochipCode,
-    validateMicrochipDate,
-} from "@/shared/utils/utilityFunctions";
+import {normalizePetRecordStatus} from "@/shared/utils/utilityFunctions";
 
 import PetContactLinksPanel from "@/features/pet/components/petContactLinksPanel";
 import AddCenterContactToPetContactLinksDialog from "../dialogs/addCenterContactToPetContactLinksDialog";
@@ -93,10 +92,10 @@ function formatAge(birthDate: string | null) {
     return y ? `${y} y ${m}` : m;
 }
 
-function formatBirthDate(birthDate: string | null) {
-    if (!birthDate) return "—";
+function formatDisplayDate(value: string | null | undefined) {
+    if (!value) return "—";
 
-    const dateOnly = birthDate.slice(0, 10);
+    const dateOnly = value.slice(0, 10);
     const parts = dateOnly.split("-");
 
     if (parts.length !== 3) return "—";
@@ -179,15 +178,41 @@ function formatStatus(status: PetStatus | string | null | undefined) {
     }
 }
 
-function formatVetName(vet: any) {
-    if (!vet) return "—";
-    if (typeof vet.name === "string" && vet.name.trim()) return vet.name.trim();
+function formatVetName(vet: unknown) {
+    if (!vet || typeof vet !== "object") return "—";
+
+    const vetRecord = vet as {
+        name?: string | null;
+        full_name?: string | null;
+        first_name?: string | null;
+        last_name?: string | null;
+    };
+
+    if (typeof vetRecord.name === "string" && vetRecord.name.trim()) {
+        return vetRecord.name.trim();
+    }
 
     const full =
-        vet.full_name ??
-        `${vet.first_name ?? ""} ${vet.last_name ?? ""}`.trim();
+        vetRecord.full_name ??
+        `${vetRecord.first_name ?? ""} ${vetRecord.last_name ?? ""}`.trim();
 
     return full || "—";
+}
+
+function formatLastAttendingVet(pet: PetDataInterface) {
+    const internalVetName = formatVetName(pet.last_attending_vet);
+
+    if (internalVetName !== "—") {
+        return internalVetName;
+    }
+
+    const externalVetName = pet.last_attending_vet_external_name?.trim();
+
+    if (externalVetName) {
+        return `${externalVetName} (externo)`;
+    }
+
+    return "—";
 }
 
 function formatSize(size: string | null | undefined) {
@@ -264,15 +289,28 @@ function validateBirthDate(value: string): string | null {
 type Props = {
     enableEdition?: boolean;
     onEditWholePet?: () => void;
+    onDeletedDraftPet?: () => void;
 };
 
 export default function PetDataView({
     enableEdition = false,
     onEditWholePet,
+    onDeletedDraftPet,
 }: Props) {
+    const router = useRouter();
     const centerId = 1;
 
-    const {pet, petLoading, petError, setPetDataSlice} = usePetDataSlice();
+    const {removePetFromAllPetsForCenterSlice} = useAllPetsForCenterSlice({
+        centerId,
+    });
+
+    const {
+        petData,
+        petDataLoading,
+        petDataError,
+        clearPetDataSlice,
+        setPetDataSlice,
+    } = usePetDataSlice();
 
     const {
         centerVets,
@@ -300,8 +338,8 @@ export default function PetDataView({
     const [openLastWeightDialog, setOpenLastWeightDialog] = useState(false);
     const [openVisualTagDialog, setOpenVisualTagDialog] = useState(false);
     const [
-        openVisualIdentificationOrTatooDescriptionDialog,
-        setOpenVisualIdentificationOrTatooDescriptionDialog,
+        openVisualIdentificationOrTattooDescriptionDialog,
+        setOpenVisualIdentificationOrTattooDescriptionDialog,
     ] = useState(false);
 
     const [openClinicalObservationsDialog, setOpenClinicalObservationsDialog] =
@@ -319,32 +357,38 @@ export default function PetDataView({
         null,
     );
 
+    const [deleteDraftPetError, setDeleteDraftPetError] = useState<
+        string | null
+    >(null);
+
     const [deletingPetContactId, setDeletingPetContactId] = useState<
         number | null
     >(null);
 
-    if (petLoading) {
+    const [deletingDraftPet, setDeletingDraftPet] = useState(false);
+
+    if (petDataLoading) {
         return <div className="text-slate-500">Cargando paciente…</div>;
     }
 
-    if (petError) {
-        return <div className="text-red-600">{petError}</div>;
+    if (petDataError) {
+        return <div className="text-red-600">{petDataError}</div>;
     }
 
-    if (!pet) return null;
+    if (!petData) return null;
 
-    const petId = pet.id;
+    const petId = petData.id;
 
     const petContactLinks: PetContactLinkInterface[] = Array.isArray(
-        pet.contact_links,
+        petData.contact_links,
     )
-        ? pet.contact_links
+        ? petData.contact_links
         : [];
 
     const hasActivePrimaryContact = hasActivePrimaryPetContact(petContactLinks);
 
     const clinicalRecordStatus = normalizePetRecordStatus(
-        pet.clinical_record_status,
+        petData.clinical_record_status,
     );
 
     const addPetContactRule = canAddPetContact(clinicalRecordStatus);
@@ -360,7 +404,12 @@ export default function PetDataView({
         canEditPetDataByDraftStatusOnly(clinicalRecordStatus) &&
         enableEdition;
 
-    const status = formatStatus(pet.status);
+    const canDeleteDraftPet = canEditPetData;
+
+    const status = formatStatus(petData.status);
+
+    const showWholePetEditButton =
+        canEditPetData && typeof onEditWholePet === "function";
 
     function handleOpenLastVeterinarianDialog() {
         setOpenLastVeterinarianDialog(true);
@@ -427,20 +476,62 @@ export default function PetDataView({
         }
     }
 
+    async function handleDeletePetDraft() {
+        if (!canDeleteDraftPet || deletingDraftPet) {
+            return;
+        }
+
+        const confirmed = window.confirm(
+            "¿Eliminar este paciente en borrador? Esta acción no se puede deshacer.",
+        );
+
+        if (!confirmed) {
+            return;
+        }
+
+        setDeleteDraftPetError(null);
+        setDeletingDraftPet(true);
+
+        try {
+            await deleteDraftPetApi({
+                centerId,
+                petId,
+            });
+
+            removePetFromAllPetsForCenterSlice(petId);
+            clearPetDataSlice();
+
+            if (typeof onDeletedDraftPet === "function") {
+                onDeletedDraftPet();
+            } else {
+                router.back();
+            }
+
+            router.refresh();
+        } catch (error) {
+            console.error("PetDataView::handleDeletePetDraft error:", error);
+            setDeleteDraftPetError(getAxiosErrorMessage(error));
+        } finally {
+            setDeletingDraftPet(false);
+        }
+    }
+
     /* ======================================================
        Field edit functions
        ====================================================== */
 
     const editName = canEditPetData ? () => setOpenNameDialog(true) : undefined;
+
     const editBirthDate = canEditPetData
         ? () => setOpenBirthDateDialog(true)
         : undefined;
+
     const editSpeciesAndBreed = canEditPetData
         ? () => setOpenSpeciesDialog(true)
         : undefined;
 
-    const editVisualIdentificationOrTatooDescription = canEditPetData
-        ? () => setOpenVisualIdentificationOrTatooDescriptionDialog(true)
+    const editVisualIdentificationOrTattooDescription = canEditPetData
+        ? () => setOpenVisualIdentificationOrTattooDescriptionDialog(true)
         : undefined;
 
     const editMicrochip = canEditPetData
@@ -501,10 +592,10 @@ export default function PetDataView({
                         className="h-auto p-0"
                     >
                         <div className="group relative h-48 w-48 overflow-hidden rounded-xl bg-slate-100">
-                            {pet.photo_url ? (
+                            {petData.photo_url ? (
                                 <Image
-                                    src={pet.photo_url}
-                                    alt={pet.name}
+                                    src={petData.photo_url}
+                                    alt={petData.name}
                                     width={192}
                                     height={192}
                                     sizes="100vw"
@@ -525,10 +616,10 @@ export default function PetDataView({
                     </GlobalButton>
                 ) : (
                     <div className="relative h-48 w-48 overflow-hidden rounded-xl bg-slate-100">
-                        {pet.photo_url ? (
+                        {petData.photo_url ? (
                             <Image
-                                src={pet.photo_url}
-                                alt={pet.name}
+                                src={petData.photo_url}
+                                alt={petData.name}
                                 width={192}
                                 height={192}
                                 sizes="100vw"
@@ -542,19 +633,21 @@ export default function PetDataView({
                     </div>
                 )}
 
-                <div className="flex flex-1 items-start justify-between">
+                <div className="flex flex-1 items-start justify-between gap-4">
                     <div>
                         <h2 className="text-lg font-semibold text-slate-900">
-                            {pet.name}
+                            {petData.name}
                         </h2>
 
                         <p className="text-sm text-slate-600">
-                            {pet.species?.name ?? "—"}
-                            {pet.breed?.name ? ` · ${pet.breed.name}` : ""}
+                            {petData.species?.name ?? "—"}
+                            {petData.breed?.name
+                                ? ` · ${petData.breed.name}`
+                                : ""}
                         </p>
 
                         <p className="text-sm text-slate-600">
-                            Historia clínica: {pet.history_code ?? "—"}
+                            Historia clínica: {petData.history_code ?? "—"}
                         </p>
 
                         <span
@@ -566,16 +659,30 @@ export default function PetDataView({
                             {status.label}
                         </span>
                     </div>
+
+                    {showWholePetEditButton && (
+                        <GlobalButton
+                            variant="ghost"
+                            onClick={onEditWholePet}
+                            className="shrink-0"
+                        >
+                            Editar ficha completa
+                        </GlobalButton>
+                    )}
                 </div>
             </div>
 
             <div className="space-y-6 rounded-xl border border-slate-200 bg-slate-100 p-6 shadow-sm">
                 <Section title="Datos básicos">
-                    <Row label="Nombre" value={pet.name} onEdit={editName} />
+                    <Row
+                        label="Nombre"
+                        value={petData.name}
+                        onEdit={editName}
+                    />
 
                     <Row
                         label="Sexo"
-                        value={formatSex(pet.sex)}
+                        value={formatSex(petData.sex)}
                         onEdit={editSex}
                     />
 
@@ -584,40 +691,42 @@ export default function PetDataView({
                         items={[
                             {
                                 label: "Especie",
-                                value: pet.species?.name ?? "—",
+                                value: petData.species?.name ?? "—",
                             },
                             {
                                 label: "Raza",
-                                value: pet.breed?.name ?? "—",
+                                value: petData.breed?.name ?? "—",
                             },
                         ]}
                         onEdit={editSpeciesAndBreed}
                         colSpan={2}
+                        gridColumns={2}
                     />
 
                     <BirthDateAgeRow
-                        birthDate={formatBirthDate(pet.birth_date)}
-                        age={formatAge(pet.birth_date)}
+                        birthDate={formatDisplayDate(petData.birth_date)}
+                        age={formatAge(petData.birth_date)}
                         onEdit={editBirthDate}
                     />
 
                     <Row
                         label="Esterilizado"
-                        value={formatYesNo(pet.sterilized)}
+                        value={formatYesNo(petData.sterilized)}
                         onEdit={editSterilized}
+                        centerValue
                     />
 
                     <Row
                         label="Tamaño"
-                        value={formatSize(pet.size)}
+                        value={formatSize(petData.size)}
                         onEdit={editSize}
                     />
 
                     <Row
                         label="Último peso"
                         value={
-                            pet.last_weight != null
-                                ? `${pet.last_weight} kg`
+                            petData.last_weight != null
+                                ? `${petData.last_weight} kg`
                                 : "—"
                         }
                         onEdit={editLastWeight}
@@ -625,23 +734,23 @@ export default function PetDataView({
 
                     <Row
                         label="Referencia"
-                        value={pet.reference ?? "—"}
+                        value={petData.reference ?? "—"}
                         onEdit={editReference}
-                        colSpan={4}
+                        colSpan={3}
                     />
                 </Section>
 
                 <Section title="Identificación">
                     <Row
                         label="Descripción corporal"
-                        value={pet.body_description ?? "—"}
+                        value={petData.body_description ?? "—"}
                         onEdit={editBodyDescription}
                         colSpan={2}
                     />
 
                     <Row
                         label="Placa, collar, etiqueta"
-                        value={pet.visual_tag ?? "—"}
+                        value={petData.visual_tag ?? "—"}
                         onEdit={editVisualTag}
                         colSpan={2}
                     />
@@ -651,27 +760,29 @@ export default function PetDataView({
                         items={[
                             {
                                 label: "Pedigrí",
-                                value: pet.has_pedigree ? "Sí" : "No",
+                                value: petData.has_pedigree ? "Sí" : "No",
+                                colSpan: 1,
+                                centerValue: true,
                             },
                             {
                                 label: "Registro de Pedigrí",
-                                value: pet.pedigree_registry ?? "—",
+                                value: petData.pedigree_registry ?? "—",
+                                colSpan: 3,
                             },
                         ]}
                         onEdit={editPedigree}
                         colSpan={4}
-                        className="md:row-start-2 md:col-start-1"
+                        gridColumns={4}
                     />
 
                     <Row
-                        label="Identificación visual o descripción de tatuaje (si tiene)"
+                        label="Identificación visual o descripción de tatuaje"
                         value={
-                            pet.visual_identification_or_tattoo_description ??
+                            petData.visual_identification_or_tattoo_description ??
                             "—"
                         }
-                        onEdit={editVisualIdentificationOrTatooDescription}
+                        onEdit={editVisualIdentificationOrTattooDescription}
                         colSpan={4}
-                        className="md:row-start-3 md:col-start-1"
                     />
                 </Section>
 
@@ -681,37 +792,45 @@ export default function PetDataView({
                         items={[
                             {
                                 label: "Microchip",
-                                value: pet.has_microchip ? "Sí" : "No",
+                                value: petData.has_microchip ? "Sí" : "No",
+                                colSpan: 1,
+                                centerValue: true,
                             },
                             {
                                 label: "Código Microchip",
-                                value: pet.microchip_code ?? "—",
+                                value: petData.microchip_code ?? "—",
+                                colSpan: 1,
                             },
                             {
                                 label: "Fecha Implantación",
-                                value: pet.microchip_date ?? "—",
+                                value: formatDisplayDate(
+                                    petData.microchip_date,
+                                ),
+                                colSpan: 1,
                             },
                             {
                                 label: "Ubicación Corporal",
-                                value: pet.microchip_body_region ?? "—",
+                                value: petData.microchip_body_region ?? "—",
+                                colSpan: 1,
                             },
                         ]}
                         onEdit={editMicrochip}
                         colSpan={4}
+                        gridColumns={4}
                     />
                 </Section>
 
                 <Section title="Observaciones">
                     <Row
                         label="Observaciones clínicas"
-                        value={pet.clinical_observations ?? "—"}
+                        value={petData.clinical_observations ?? "—"}
                         onEdit={editClinicalObservations}
                         colSpan={4}
                     />
 
                     <Row
                         label="Notas internas"
-                        value={pet.internal_notes ?? "—"}
+                        value={petData.internal_notes ?? "—"}
                         onEdit={editInternalNotes}
                         colSpan={4}
                     />
@@ -741,7 +860,7 @@ export default function PetDataView({
                         <PetContactLinksPanel
                             centerId={centerId}
                             petId={petId}
-                            pet={pet}
+                            pet={petData}
                             contacts={petContactLinks}
                             deletingPetContactId={deletingPetContactId}
                             onAddContact={
@@ -770,326 +889,333 @@ export default function PetDataView({
                 <Section title="Atención veterinaria">
                     <Row
                         label="Veterinario tratante anterior"
-                        value={formatVetName(pet.last_attending_vet)}
+                        value={formatLastAttendingVet(petData)}
                         onEdit={editVet}
+                        colSpan={2}
                     />
 
                     <Row
                         label="Centro veterinario"
-                        value={pet.veterinary_center?.name ?? "—"}
+                        value={petData.veterinary_center?.name ?? "—"}
+                        colSpan={2}
                     />
                 </Section>
             </div>
 
-            {pet && (
-                <EditPetTextFieldDialog
-                    open={openNameDialog}
-                    centerId={centerId}
-                    pet={pet}
-                    onClose={() => setOpenNameDialog(false)}
-                    title="Editar Nombre"
-                    sectionTitle="Nombre de la Mascota"
-                    fieldName="name"
-                    label="Nombre"
-                    description="Ingresa el Nombre de la Mascota"
-                    placeholder="Ej: Toby"
-                    maxLength={100}
-                    rows={1}
-                    multiline={false}
-                    emptyAsNull={false}
-                    showCounter={true}
-                    validateValue={null}
-                    showChangeReason={true}
-                    requireChangeReason={false}
-                    changeReasonPlaceholder="Ej: Corrección ortográfica del nombre registrado."
-                />
+            {canDeleteDraftPet && (
+                <div className="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 shadow-sm">
+                    <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                        <div>
+                            <h3 className="text-sm font-semibold text-red-800">
+                                Eliminar paciente en borrador
+                            </h3>
+
+                            <p className="mt-1 text-sm text-red-700">
+                                Esta acción elimina el paciente mientras todavía
+                                está en borrador. Si el paciente tiene historia
+                                clínica activa no podrá eliminarlo.
+                            </p>
+
+                            {deleteDraftPetError && (
+                                <p className="mt-2 text-sm font-medium text-red-700">
+                                    {deleteDraftPetError}
+                                </p>
+                            )}
+                        </div>
+
+                        <GlobalButton
+                            variant="ghost"
+                            onClick={handleDeletePetDraft}
+                            disabled={deletingDraftPet}
+                            className={clsx(
+                                "shrink-0 border border-red-300 bg-white text-red-700",
+                                "hover:border-red-400 hover:bg-red-100",
+                                deletingDraftPet &&
+                                    "cursor-not-allowed opacity-60",
+                            )}
+                        >
+                            {deletingDraftPet
+                                ? "Eliminando..."
+                                : "Eliminar paciente"}
+                        </GlobalButton>
+                    </div>
+                </div>
             )}
 
-            {pet && (
-                <EditPetSelectFieldDialog
-                    open={openSexDialog}
-                    centerId={centerId}
-                    pet={pet}
-                    onClose={() => setOpenSexDialog(false)}
-                    title="Editar sexo"
-                    sectionTitle="Sexo de la Mascota"
-                    fieldName="sex"
-                    label="Sexo"
-                    description="Selecciona el Sexo de la Mascota."
-                    options={PET_SEX_OPTIONS}
-                    allowEmpty={false}
-                    emptyAsNull={false}
-                    showChangeReason={true}
-                    requireChangeReason={false}
-                    changeReasonPlaceholder="Ej: Corrección del sexo registrado inicialmente."
-                />
-            )}
+            <EditPetTextFieldDialog
+                open={openNameDialog}
+                centerId={centerId}
+                pet={petData}
+                onClose={() => setOpenNameDialog(false)}
+                title="Editar Nombre"
+                sectionTitle="Nombre de la Mascota"
+                fieldName="name"
+                label="Nombre"
+                description="Ingresa el Nombre de la Mascota"
+                placeholder="Ej: Toby"
+                maxLength={100}
+                rows={1}
+                multiline={false}
+                emptyAsNull={false}
+                showCounter={true}
+                validateValue={null}
+                showChangeReason={true}
+                requireChangeReason={false}
+                changeReasonPlaceholder="Ej: Corrección ortográfica del nombre registrado."
+            />
 
-            {pet && (
-                <EditPetDateFieldDialog
-                    open={openBirthDateDialog}
-                    centerId={centerId}
-                    pet={pet}
-                    onClose={() => setOpenBirthDateDialog(false)}
-                    title="Editar Fecha de Nacimiento (Edad)"
-                    sectionTitle="Fecha de Nacimiento"
-                    fieldName="birth_date"
-                    label="Fecha de nacimiento"
-                    description="Ingresa la fecha de nacimiento del paciente. La edad se calculará automáticamente a partir de esta fecha."
-                    emptyAsNull={false}
-                    max={new Date().toISOString().slice(0, 10)}
-                    validateValue={validateBirthDate}
-                    showAgePreview
-                    showChangeReason={true}
-                    requireChangeReason={false}
-                    changeReasonPlaceholder="Ej: Corrección de la fecha de nacimiento registrada inicialmente."
-                />
-            )}
+            <EditPetSelectFieldDialog
+                open={openSexDialog}
+                centerId={centerId}
+                pet={petData}
+                onClose={() => setOpenSexDialog(false)}
+                title="Editar sexo"
+                sectionTitle="Sexo de la Mascota"
+                fieldName="sex"
+                label="Sexo"
+                description="Selecciona el Sexo de la Mascota."
+                options={PET_SEX_OPTIONS}
+                allowEmpty={false}
+                emptyAsNull={false}
+                showChangeReason={true}
+                requireChangeReason={false}
+                changeReasonPlaceholder="Ej: Corrección del sexo registrado inicialmente."
+            />
 
-            {pet && (
-                <EditPetSpeciesAndBreedDialog
-                    open={openSpeciesDialog}
-                    centerId={centerId}
-                    pet={pet}
-                    onClose={() => setOpenSpeciesDialog(false)}
-                />
-            )}
+            <EditPetDateFieldDialog
+                open={openBirthDateDialog}
+                centerId={centerId}
+                pet={petData}
+                onClose={() => setOpenBirthDateDialog(false)}
+                title="Editar Fecha de Nacimiento (Edad)"
+                sectionTitle="Fecha de Nacimiento"
+                fieldName="birth_date"
+                label="Fecha de nacimiento"
+                description="Ingresa la fecha de nacimiento del paciente. La edad se calculará automáticamente a partir de esta fecha."
+                emptyAsNull={false}
+                max={new Date().toISOString().slice(0, 10)}
+                validateValue={validateBirthDate}
+                showAgePreview
+                showChangeReason={true}
+                requireChangeReason={false}
+                changeReasonPlaceholder="Ej: Corrección de la fecha de nacimiento registrada inicialmente."
+            />
 
-            {pet && (
-                <EditPetBooleanFieldDialog
-                    open={openSterilizedDialog}
-                    centerId={centerId}
-                    pet={pet}
-                    onClose={() => setOpenSterilizedDialog(false)}
-                    title="Editar Esterilización"
-                    sectionTitle="Esterilización de la Mascota"
-                    fieldName="sterilized"
-                    label="Esterilizado"
-                    description="Indica si la Mascota ha sido Esterilizada."
-                    trueLabel="Sí"
-                    falseLabel="No"
-                />
-            )}
+            <EditPetSpeciesAndBreedDialog
+                open={openSpeciesDialog}
+                centerId={centerId}
+                pet={petData}
+                onClose={() => setOpenSpeciesDialog(false)}
+            />
 
-            {pet && (
-                <EditPetSelectFieldDialog
-                    open={openSizeDialog}
-                    centerId={centerId}
-                    pet={pet}
-                    onClose={() => setOpenSizeDialog(false)}
-                    title="Editar tamaño"
-                    sectionTitle="Tamaño de la mascota"
-                    fieldName="size"
-                    label="Tamaño"
-                    description="Selecciona el tamaño corporal aproximado de la mascota."
-                    options={PET_SIZE_OPTIONS}
-                    allowEmpty={true}
-                    emptyOptionLabel="Sin especificar"
-                    emptyAsNull={true}
-                    showChangeReason={true}
-                    requireChangeReason={false}
-                    changeReasonPlaceholder="Ej: Corrección del tamaño registrado inicialmente."
-                />
-            )}
+            <EditPetBooleanFieldDialog
+                open={openSterilizedDialog}
+                centerId={centerId}
+                pet={petData}
+                onClose={() => setOpenSterilizedDialog(false)}
+                title="Editar Esterilización"
+                sectionTitle="Esterilización de la Mascota"
+                fieldName="sterilized"
+                label="Esterilizado"
+                description="Indica si la Mascota ha sido Esterilizada."
+                trueLabel="Sí"
+                falseLabel="No"
+            />
 
-            {pet && (
-                <EditPetNumberFieldDialog
-                    open={openLastWeightDialog}
-                    centerId={centerId}
-                    pet={pet}
-                    onClose={() => setOpenLastWeightDialog(false)}
-                    title="Editar Último Peso"
-                    sectionTitle="Último Peso de la Mascota"
-                    fieldName="last_weight"
-                    label="Último Peso"
-                    description="Ingresa el Último Peso Registrado de la Mascota."
-                    placeholder="Ej: 4.18"
-                    suffix="kg"
-                    step="0.01"
-                    min={0}
-                    max={999.99}
-                    emptyAsNull={true}
-                />
-            )}
+            <EditPetSelectFieldDialog
+                open={openSizeDialog}
+                centerId={centerId}
+                pet={petData}
+                onClose={() => setOpenSizeDialog(false)}
+                title="Editar tamaño"
+                sectionTitle="Tamaño de la mascota"
+                fieldName="size"
+                label="Tamaño"
+                description="Selecciona el tamaño corporal aproximado de la mascota."
+                options={PET_SIZE_OPTIONS}
+                allowEmpty={true}
+                emptyOptionLabel="Sin especificar"
+                emptyAsNull={true}
+                showChangeReason={true}
+                requireChangeReason={false}
+                changeReasonPlaceholder="Ej: Corrección del tamaño registrado inicialmente."
+            />
 
-            {pet && (
-                <EditPetTextFieldDialog
-                    open={openBodyDescriptionDialog}
-                    centerId={centerId}
-                    pet={pet}
-                    onClose={() => setOpenBodyDescriptionDialog(false)}
-                    title="Editar Descripción Corporal de la Mascota"
-                    sectionTitle="Descripción Corporal de la Mascota"
-                    fieldName="body_description"
-                    label="Descripción corporal"
-                    description="Describe rasgos físicos visibles de la mascota, por ejemplo color, patrón, contextura o marcas distintivas."
-                    placeholder="Ej: Gata siamés, pelaje claro con extremidades oscuras, ojos azules."
-                    maxLength={300}
-                    rows={4}
-                    multiline={true}
-                    emptyAsNull={true}
-                    showCounter={true}
-                    validateValue={null}
-                />
-            )}
+            <EditPetNumberFieldDialog
+                open={openLastWeightDialog}
+                centerId={centerId}
+                pet={petData}
+                onClose={() => setOpenLastWeightDialog(false)}
+                title="Editar Último Peso"
+                sectionTitle="Último Peso de la Mascota"
+                fieldName="last_weight"
+                label="Último Peso"
+                description="Ingresa el Último Peso Registrado de la Mascota."
+                placeholder="Ej: 4.18"
+                suffix="kg"
+                step="0.01"
+                min={0}
+                max={999.99}
+                emptyAsNull={true}
+            />
 
-            {pet && (
-                <EditPetTextFieldDialog
-                    open={openReferenceDialog}
-                    centerId={centerId}
-                    pet={pet}
-                    onClose={() => setOpenReferenceDialog(false)}
-                    title="Editar referencia"
-                    sectionTitle="Referencia de la mascota"
-                    fieldName="reference"
-                    label="Referencia"
-                    description="¿Cómo llegaste a nosotros?"
-                    placeholder="Ej: Por Instagram"
-                    maxLength={100}
-                    multiline={true}
-                    rows={3}
-                    emptyAsNull={false}
-                    showCounter={true}
-                    validateValue={null}
-                />
-            )}
+            <EditPetTextFieldDialog
+                open={openBodyDescriptionDialog}
+                centerId={centerId}
+                pet={petData}
+                onClose={() => setOpenBodyDescriptionDialog(false)}
+                title="Editar Descripción Corporal de la Mascota"
+                sectionTitle="Descripción Corporal de la Mascota"
+                fieldName="body_description"
+                label="Descripción corporal"
+                description="Describe rasgos físicos visibles de la mascota, por ejemplo color, patrón, contextura o marcas distintivas."
+                placeholder="Ej: Gata siamés, pelaje claro con extremidades oscuras, ojos azules."
+                maxLength={300}
+                rows={4}
+                multiline={true}
+                emptyAsNull={true}
+                showCounter={true}
+                validateValue={null}
+            />
 
-            {pet && (
-                <EditPetTextFieldDialog
-                    open={openVisualTagDialog}
-                    centerId={centerId}
-                    pet={pet}
-                    onClose={() => setOpenVisualTagDialog(false)}
-                    title="Editar Placa o Collar"
-                    sectionTitle="Placa o Collar de la Mascota"
-                    fieldName="visual_tag"
-                    label="Placa o Collar"
-                    description="Ingresa la Inscripción de la Placa o Collar de la Mascota."
-                    placeholder="Ej: Toby."
-                    maxLength={20}
-                    multiline={false}
-                    rows={1}
-                    emptyAsNull={false}
-                    showCounter={true}
-                    validateValue={null}
-                />
-            )}
+            <EditPetTextFieldDialog
+                open={openReferenceDialog}
+                centerId={centerId}
+                pet={petData}
+                onClose={() => setOpenReferenceDialog(false)}
+                title="Editar referencia"
+                sectionTitle="Referencia de la mascota"
+                fieldName="reference"
+                label="Referencia"
+                description="¿Cómo llegaste a nosotros?"
+                placeholder="Ej: Por Instagram"
+                maxLength={100}
+                multiline={true}
+                rows={3}
+                emptyAsNull={false}
+                showCounter={true}
+                validateValue={null}
+            />
 
-            {pet && (
-                <EditPetPedigreeDialog
-                    open={openPedigreeDialog}
-                    centerId={centerId}
-                    pet={pet}
-                    onClose={() => setOpenPedigreeDialog(false)}
-                    onSaved={(updatedPet) => {
-                        setPetDataSlice(updatedPet);
-                        setOpenPedigreeDialog(false);
-                    }}
-                />
-            )}
+            <EditPetTextFieldDialog
+                open={openVisualTagDialog}
+                centerId={centerId}
+                pet={petData}
+                onClose={() => setOpenVisualTagDialog(false)}
+                title="Editar Placa o Collar"
+                sectionTitle="Placa o Collar de la Mascota"
+                fieldName="visual_tag"
+                label="Placa o Collar"
+                description="Ingresa la Inscripción de la Placa o Collar de la Mascota."
+                placeholder="Ej: Toby."
+                maxLength={20}
+                multiline={false}
+                rows={1}
+                emptyAsNull={false}
+                showCounter={true}
+                validateValue={null}
+            />
 
-            {pet && (
-                <EditPetTextFieldDialog
-                    open={openVisualIdentificationOrTatooDescriptionDialog}
-                    centerId={centerId}
-                    pet={pet}
-                    onClose={() =>
-                        setOpenVisualIdentificationOrTatooDescriptionDialog(
-                            false,
-                        )
-                    }
-                    title="Editar Identificación visual o descripción de tatuaje (si tiene)"
-                    sectionTitle="Identificación visual o descripción de tatuaje"
-                    fieldName="visual_identification_or_tattoo_description"
-                    label="Identificación Visual o Descripción de Tatuaje"
-                    description="Ingresa Identificación Visual o Descripción de Tatuaje de la Mascota."
-                    placeholder="Ej: tatuaje de la granja propietaria"
-                    maxLength={100}
-                    multiline={true}
-                    rows={3}
-                    emptyAsNull={true}
-                    showCounter={true}
-                    validateValue={null}
-                />
-            )}
+            <EditPetPedigreeDialog
+                open={openPedigreeDialog}
+                centerId={centerId}
+                pet={petData}
+                onClose={() => setOpenPedigreeDialog(false)}
+                onSaved={(updatedPet) => {
+                    setPetDataSlice(updatedPet);
+                    setOpenPedigreeDialog(false);
+                }}
+            />
 
-            {pet && (
-                <EditPetMicrochipDialog
-                    open={openMicrochipDialog}
-                    centerId={centerId}
-                    pet={pet}
-                    onClose={() => setOpenMicrochipDialog(false)}
-                    onSaved={(updatedPet) => {
-                        setPetDataSlice(updatedPet);
-                        setOpenMicrochipDialog(false);
-                    }}
-                />
-            )}
-            {pet && (
-                <EditPetTextFieldDialog
-                    open={openClinicalObservationsDialog}
-                    centerId={centerId}
-                    pet={pet}
-                    onClose={() => setOpenClinicalObservationsDialog(false)}
-                    title="Editar Observaciones Clínicas"
-                    sectionTitle="Observaciones Clínicas"
-                    fieldName="clinical_observations"
-                    label="Observaciones Clínicas"
-                    description="Ingresa Observaciones Clínicas"
-                    placeholder="Ej: El paciente se vuelve agresivo durante examinación física."
-                    maxLength={150}
-                    multiline={true}
-                    rows={2}
-                    emptyAsNull={true}
-                    showCounter={false}
-                    validateValue={null}
-                />
-            )}
+            <EditPetTextFieldDialog
+                open={openVisualIdentificationOrTattooDescriptionDialog}
+                centerId={centerId}
+                pet={petData}
+                onClose={() =>
+                    setOpenVisualIdentificationOrTattooDescriptionDialog(false)
+                }
+                title="Editar Identificación visual o descripción de tatuaje (si tiene)"
+                sectionTitle="Identificación visual o descripción de tatuaje"
+                fieldName="visual_identification_or_tattoo_description"
+                label="Identificación Visual o Descripción de Tatuaje"
+                description="Ingresa Identificación Visual o Descripción de Tatuaje de la Mascota."
+                placeholder="Ej: tatuaje de la granja propietaria"
+                maxLength={100}
+                multiline={true}
+                rows={3}
+                emptyAsNull={true}
+                showCounter={true}
+                validateValue={null}
+            />
 
-            {pet && (
-                <EditPetTextFieldDialog
-                    open={openInternalNotesDialog}
-                    centerId={centerId}
-                    pet={pet}
-                    onClose={() => setOpenInternalNotesDialog(false)}
-                    title="Editar Notas Internas"
-                    sectionTitle="Notas Internas"
-                    fieldName="internal_notes"
-                    label="Notas Internas"
-                    description="Ingresa Notas Internas"
-                    placeholder="Ej: El responsable prefiere el contacto por Whatsapp."
-                    maxLength={100}
-                    multiline={true}
-                    rows={2}
-                    emptyAsNull={true}
-                    showCounter={false}
-                    validateValue={null}
-                />
-            )}
+            <EditPetMicrochipDialog
+                open={openMicrochipDialog}
+                centerId={centerId}
+                pet={petData}
+                onClose={() => setOpenMicrochipDialog(false)}
+                onSaved={(updatedPet) => {
+                    setPetDataSlice(updatedPet);
+                    setOpenMicrochipDialog(false);
+                }}
+            />
 
-            {pet && (
-                <AddCenterContactToPetContactLinksDialog
-                    open={openAddContactDialog}
-                    centerId={centerId}
-                    petId={petId}
-                    pet={pet}
-                    onClose={() => setOpenAddContactDialog(false)}
-                    onSaved={handlePetContactSaved}
-                />
-            )}
+            <EditPetTextFieldDialog
+                open={openClinicalObservationsDialog}
+                centerId={centerId}
+                pet={petData}
+                onClose={() => setOpenClinicalObservationsDialog(false)}
+                title="Editar Observaciones Clínicas"
+                sectionTitle="Observaciones Clínicas"
+                fieldName="clinical_observations"
+                label="Observaciones Clínicas"
+                description="Ingresa Observaciones Clínicas"
+                placeholder="Ej: El paciente se vuelve agresivo durante examinación física."
+                maxLength={150}
+                multiline={true}
+                rows={2}
+                emptyAsNull={true}
+                showCounter={false}
+                validateValue={null}
+            />
 
-            {pet && (
-                <EditPetLastAttendingVeterinarianDialog
-                    open={openLastVeterinarianDialog}
-                    centerId={centerId}
-                    pet={pet}
-                    veterinarianOptions={centerVets}
-                    isLoadingVeterinarians={centerVetsLoading}
-                    veterinarianLoadError={centerVetsError}
-                    onClose={() => setOpenLastVeterinarianDialog(false)}
-                    onSaved={handleLastVeterinarianSaved}
-                />
-            )}
+            <EditPetTextFieldDialog
+                open={openInternalNotesDialog}
+                centerId={centerId}
+                pet={petData}
+                onClose={() => setOpenInternalNotesDialog(false)}
+                title="Editar Notas Internas"
+                sectionTitle="Notas Internas"
+                fieldName="internal_notes"
+                label="Notas Internas"
+                description="Ingresa Notas Internas"
+                placeholder="Ej: El responsable prefiere el contacto por Whatsapp."
+                maxLength={100}
+                multiline={true}
+                rows={2}
+                emptyAsNull={true}
+                showCounter={false}
+                validateValue={null}
+            />
+
+            <AddCenterContactToPetContactLinksDialog
+                open={openAddContactDialog}
+                centerId={centerId}
+                petId={petId}
+                pet={petData}
+                onClose={() => setOpenAddContactDialog(false)}
+                onSaved={handlePetContactSaved}
+            />
+
+            <EditPetLastAttendingVeterinarianDialog
+                open={openLastVeterinarianDialog}
+                centerId={centerId}
+                pet={petData}
+                veterinarianOptions={centerVets}
+                isLoadingVeterinarians={centerVetsLoading}
+                veterinarianLoadError={centerVetsError}
+                onClose={() => setOpenLastVeterinarianDialog(false)}
+                onSaved={handleLastVeterinarianSaved}
+            />
         </div>
     );
 }
@@ -1140,7 +1266,6 @@ function BirthDateAgeRow({birthDate, age, onEdit}: BirthDateAgeRowProps) {
                                 "flex h-7 w-7 shrink-0 items-center justify-center rounded-lg p-0",
                                 "bg-white shadow-sm ring-1 ring-slate-200",
                                 "transition-all duration-150",
-                                "group-hover:shadow-md group-hover:ring-slate-300",
                             )}
                         >
                             ✏️
@@ -1196,6 +1321,7 @@ type RowProps = {
     editDisabled?: boolean;
     editDisabledTitle?: string;
     className?: string;
+    centerValue?: boolean;
 };
 
 function Row({
@@ -1206,6 +1332,7 @@ function Row({
     editDisabled = false,
     editDisabledTitle,
     className,
+    centerValue = false,
 }: RowProps) {
     const isEditable = typeof onEdit === "function";
     const showEditButton = isEditable || editDisabled;
@@ -1239,7 +1366,6 @@ function Row({
                                 "flex h-7 w-7 shrink-0 items-center justify-center rounded-lg p-0",
                                 "bg-white shadow-sm ring-1 ring-slate-200",
                                 "transition-all duration-150",
-                                "group-hover:shadow-md group-hover:ring-slate-300",
                                 !isEditable && "cursor-not-allowed opacity-40",
                             )}
                         >
@@ -1251,6 +1377,8 @@ function Row({
                 <div
                     className={clsx(
                         "whitespace-pre-wrap break-words text-[15px] leading-6",
+                        centerValue &&
+                            "flex min-h-10 items-center justify-center rounded-lg bg-slate-50 px-3 text-center",
                         isEmpty
                             ? "font-normal text-slate-400"
                             : "font-medium text-slate-900",
@@ -1266,12 +1394,15 @@ function Row({
 type GroupedRowItem = {
     label: string;
     value: string;
+    colSpan?: 1 | 2 | 3 | 4;
+    centerValue?: boolean;
 };
 
 type GroupedRowProps = {
     title: string;
     items: GroupedRowItem[];
     colSpan?: 1 | 2 | 3 | 4;
+    gridColumns?: 2 | 4;
     onEdit?: () => void;
     editDisabled?: boolean;
     editDisabledTitle?: string;
@@ -1282,6 +1413,7 @@ function GroupedRow({
     title,
     items,
     colSpan = 1,
+    gridColumns = 2,
     onEdit,
     editDisabled = false,
     editDisabledTitle,
@@ -1297,6 +1429,12 @@ function GroupedRow({
         colSpan === 3 && "md:col-span-3",
         colSpan === 4 && "md:col-span-4",
         className,
+    );
+
+    const gridClass = clsx(
+        "grid grid-cols-1 gap-3",
+        gridColumns === 2 && "sm:grid-cols-2",
+        gridColumns === 4 && "sm:grid-cols-4",
     );
 
     return (
@@ -1318,7 +1456,6 @@ function GroupedRow({
                                 "flex h-7 w-7 shrink-0 items-center justify-center rounded-lg p-0",
                                 "bg-white shadow-sm ring-1 ring-slate-200",
                                 "transition-all duration-150",
-                                "group-hover:shadow-md group-hover:ring-slate-300",
                                 !isEditable && "cursor-not-allowed opacity-40",
                             )}
                         >
@@ -1327,12 +1464,19 @@ function GroupedRow({
                     )}
                 </div>
 
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className={gridClass}>
                     {items.map((item) => {
                         const isEmpty = item.value.trim() === "—";
 
                         return (
-                            <div key={item.label}>
+                            <div
+                                key={item.label}
+                                className={clsx(
+                                    item.colSpan === 2 && "sm:col-span-2",
+                                    item.colSpan === 3 && "sm:col-span-3",
+                                    item.colSpan === 4 && "sm:col-span-4",
+                                )}
+                            >
                                 <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
                                     {item.label}
                                 </div>
@@ -1340,6 +1484,8 @@ function GroupedRow({
                                 <div
                                     className={clsx(
                                         "mt-1 whitespace-pre-wrap break-words text-[15px] leading-6",
+                                        item.centerValue &&
+                                            "flex min-h-10 items-center justify-center rounded-lg bg-slate-50 px-3 text-center",
                                         isEmpty
                                             ? "font-normal text-slate-400"
                                             : "font-medium text-slate-900",

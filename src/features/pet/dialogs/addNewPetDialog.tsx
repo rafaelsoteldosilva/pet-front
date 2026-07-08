@@ -3,7 +3,7 @@
 "use client";
 
 import {useEffect, type ReactNode, useMemo} from "react";
-import {useFormContext, useWatch} from "react-hook-form";
+import {type FieldErrors, useFormContext, useWatch} from "react-hook-form";
 import {z} from "zod";
 import {zodResolver} from "@hookform/resolvers/zod";
 
@@ -13,6 +13,22 @@ import FormDialog from "@/shared/ui/forms/formDialog";
 /* ======================================================
    SCHEMA
    ====================================================== */
+
+const addNewPetContactLinkSchema = z.object({
+    center_contact_id: z.string().min(1, "Selecciona un contacto."),
+    role: z.string().min(1, "Selecciona el rol del contacto."),
+
+    is_primary_contact: z.boolean(),
+    is_emergency_contact: z.boolean(),
+
+    can_authorize_treatment: z.boolean(),
+    can_receive_medical_updates: z.boolean(),
+    can_receive_billing: z.boolean(),
+    can_pickup_pet: z.boolean(),
+
+    specific_relationship: z.string(),
+    pet_contact_notes: z.string(),
+});
 
 const addNewPetSchema = z
     .object({
@@ -56,6 +72,8 @@ const addNewPetSchema = z
         internal_notes: z.string(),
 
         photo_url: z.string(),
+
+        contact_links: z.array(addNewPetContactLinkSchema),
     })
     .superRefine((data, ctx) => {
         const birthDateError = validateDateNotFuture(
@@ -97,38 +115,85 @@ const addNewPetSchema = z
             });
         }
 
-        if (!data.has_microchip) {
-            return;
+        if (data.has_microchip) {
+            const microchipCode = data.microchip_code.trim();
+
+            if (microchipCode === "") {
+                ctx.addIssue({
+                    code: z.ZodIssueCode.custom,
+                    path: ["microchip_code"],
+                    message: "Indica el código de microchip.",
+                });
+            }
+
+            if (microchipCode && !/^\d{15}$/.test(microchipCode)) {
+                ctx.addIssue({
+                    code: z.ZodIssueCode.custom,
+                    path: ["microchip_code"],
+                    message: "El microchip debe tener 15 dígitos.",
+                });
+            }
+
+            const microchipDateError = validateDateNotFuture(
+                data.microchip_date,
+                "La fecha de implantación",
+            );
+
+            if (microchipDateError) {
+                ctx.addIssue({
+                    code: z.ZodIssueCode.custom,
+                    path: ["microchip_date"],
+                    message: microchipDateError,
+                });
+            }
         }
 
-        const microchipCode = data.microchip_code.trim();
-
-        if (microchipCode === "") {
-            ctx.addIssue({
-                code: z.ZodIssueCode.custom,
-                path: ["microchip_code"],
-                message: "Indica el código de microchip.",
-            });
-        }
-
-        if (microchipCode && !/^\d{15}$/.test(microchipCode)) {
-            ctx.addIssue({
-                code: z.ZodIssueCode.custom,
-                path: ["microchip_code"],
-                message: "El microchip debe tener 15 dígitos.",
-            });
-        }
-
-        const microchipDateError = validateDateNotFuture(
-            data.microchip_date,
-            "La fecha de implantación",
+        const activeContactLinks = data.contact_links.filter(
+            (link) => link.center_contact_id.trim() !== "",
         );
 
-        if (microchipDateError) {
+        if (activeContactLinks.length === 0) {
             ctx.addIssue({
                 code: z.ZodIssueCode.custom,
-                path: ["microchip_date"],
-                message: microchipDateError,
+                path: ["contact_links"],
+                message: "Debes agregar al menos un contacto principal.",
+            });
+        }
+
+        const primaryContactLinks = activeContactLinks.filter(
+            (link) => link.is_primary_contact,
+        );
+
+        if (primaryContactLinks.length === 0) {
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                path: ["contact_links"],
+                message: "Debes marcar un contacto principal.",
+            });
+        }
+
+        if (primaryContactLinks.length > 1) {
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                path: ["contact_links"],
+                message: "Solo puede haber un contacto principal.",
+            });
+        }
+
+        const selectedContactIds = activeContactLinks.map(
+            (link) => link.center_contact_id,
+        );
+
+        const hasDuplicatedContact = selectedContactIds.some(
+            (contactId, index) =>
+                selectedContactIds.indexOf(contactId) !== index,
+        );
+
+        if (hasDuplicatedContact) {
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                path: ["contact_links"],
+                message: "No puedes agregar el mismo contacto más de una vez.",
             });
         }
     });
@@ -138,6 +203,23 @@ const addNewPetSchema = z
    ====================================================== */
 
 export type AddNewPetFormValues = z.infer<typeof addNewPetSchema>;
+
+export type AddNewPetContactLinkPayload = {
+    center_contact_id: number;
+    role: string;
+
+    specific_relationship: string | null;
+
+    is_primary_contact: boolean;
+    is_emergency_contact: boolean;
+
+    can_authorize_treatment: boolean;
+    can_receive_medical_updates: boolean;
+    can_receive_billing: boolean;
+    can_pickup_pet: boolean;
+
+    pet_contact_notes: string | null;
+};
 
 export type AddNewPetPayload = {
     name: string;
@@ -173,6 +255,8 @@ export type AddNewPetPayload = {
     internal_notes: string | null;
 
     photo_url: string | null;
+
+    contact_links: AddNewPetContactLinkPayload[];
 };
 
 export type NewPetBreedOption = {
@@ -191,10 +275,20 @@ export type NewPetVeterinarianOption = {
     full_name: string;
 };
 
+export type NewPetCenterContactOption = {
+    id: number;
+    display_name: string;
+    center_contact_type?: string | null;
+    document_id?: string | null;
+    email?: string | null;
+    phone?: string | null;
+};
+
 type Props = {
     open: boolean;
     speciesOptions: NewPetSpeciesOption[];
     veterinarianOptions: NewPetVeterinarianOption[];
+    centerContactOptions: NewPetCenterContactOption[];
     saving?: boolean;
     onClose: () => void;
     onSave: (payload: AddNewPetPayload) => void | Promise<void>;
@@ -239,11 +333,19 @@ const defaultValues: AddNewPetFormValues = {
     internal_notes: "",
 
     photo_url: "",
+
+    contact_links: [],
 };
 
 /* ======================================================
    HELPERS
    ====================================================== */
+
+type UnknownRecord = Record<string, unknown>;
+
+function isRecord(value: unknown): value is UnknownRecord {
+    return typeof value === "object" && value !== null && !Array.isArray(value);
+}
 
 function emptyToNull(value: string | undefined): string | null {
     const normalized = value?.trim() ?? "";
@@ -446,7 +548,53 @@ function normalizeBeforeSave(data: AddNewPetFormValues): AddNewPetPayload {
         internal_notes: emptyToNull(data.internal_notes),
 
         photo_url: emptyToNull(data.photo_url),
+
+        contact_links: data.contact_links
+            .filter((link) => link.center_contact_id.trim() !== "")
+            .map((link) => ({
+                center_contact_id: Number(link.center_contact_id),
+                role: link.role,
+
+                specific_relationship: emptyToNull(link.specific_relationship),
+
+                is_primary_contact: link.is_primary_contact,
+                is_emergency_contact: link.is_emergency_contact,
+
+                can_authorize_treatment: link.can_authorize_treatment,
+                can_receive_medical_updates: link.can_receive_medical_updates,
+                can_receive_billing:
+                    link.role === "BILLING_RESPONSIBLE"
+                        ? true
+                        : link.can_receive_billing,
+                can_pickup_pet: link.can_pickup_pet,
+
+                pet_contact_notes: emptyToNull(link.pet_contact_notes),
+            })),
     };
+}
+
+function getContactLinksErrorMessage(
+    errors: FieldErrors<AddNewPetFormValues>,
+): string | null {
+    const contactLinksError = errors.contact_links as unknown;
+
+    if (!isRecord(contactLinksError)) {
+        return null;
+    }
+
+    const directMessage = contactLinksError.message;
+
+    if (typeof directMessage === "string") {
+        return directMessage;
+    }
+
+    const root = contactLinksError.root;
+
+    if (isRecord(root) && typeof root.message === "string") {
+        return root.message;
+    }
+
+    return null;
 }
 
 /* ======================================================
@@ -839,12 +987,21 @@ function NewPetPreviewPanel({
         name: "species_id",
     });
 
+    const contactLinks = useWatch({
+        control,
+        name: "contact_links",
+    });
+
     const selectedSpecies = speciesOptions.find(
         (species) => String(species.id) === speciesId,
     );
 
     const sexLabel =
         sex === "m" ? "Macho" : sex === "f" ? "Hembra" : "Indefinido";
+
+    const primaryContactCount = Array.isArray(contactLinks)
+        ? contactLinks.filter((link) => link.is_primary_contact).length
+        : 0;
 
     return (
         <aside className="w-72 shrink-0 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -876,6 +1033,11 @@ function NewPetPreviewPanel({
                 <PreviewItem
                     label="Especie"
                     value={selectedSpecies?.name ?? "Sin especie todavía"}
+                />
+
+                <PreviewItem
+                    label="Contacto principal"
+                    value={primaryContactCount > 0 ? "Asignado" : "Pendiente"}
                 />
 
                 <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-3 text-xs leading-5 text-slate-500">
@@ -1002,6 +1164,410 @@ function MicrochipDataSection() {
     );
 }
 
+function NewPetContactLinksDraftPanel({
+    centerContactOptions,
+}: {
+    centerContactOptions: NewPetCenterContactOption[];
+}) {
+    const {
+        control,
+        setValue,
+        formState: {errors},
+    } = useFormContext<AddNewPetFormValues>();
+
+    const contactLinks = useWatch({
+        control,
+        name: "contact_links",
+    });
+
+    const safeContactLinks = Array.isArray(contactLinks) ? contactLinks : [];
+
+    const contactLinksError = getContactLinksErrorMessage(errors);
+
+    function addContactLink() {
+        const shouldBePrimary = safeContactLinks.length === 0;
+
+        setValue(
+            "contact_links",
+            [
+                ...safeContactLinks,
+                {
+                    center_contact_id: "",
+                    role: "OWNER_GUARDIAN",
+
+                    is_primary_contact: shouldBePrimary,
+                    is_emergency_contact: false,
+
+                    can_authorize_treatment: true,
+                    can_receive_medical_updates: true,
+                    can_receive_billing: false,
+                    can_pickup_pet: true,
+
+                    specific_relationship: "",
+                    pet_contact_notes: "",
+                },
+            ],
+            {
+                shouldDirty: true,
+                shouldTouch: true,
+                shouldValidate: true,
+            },
+        );
+    }
+
+    function removeContactLink(indexToRemove: number) {
+        const nextContactLinks = safeContactLinks.filter(
+            (_, index) => index !== indexToRemove,
+        );
+
+        const hasPrimary = nextContactLinks.some(
+            (link) => link.is_primary_contact,
+        );
+
+        const normalizedContactLinks =
+            nextContactLinks.length > 0 && !hasPrimary
+                ? nextContactLinks.map((link, index) => ({
+                      ...link,
+                      is_primary_contact: index === 0,
+                  }))
+                : nextContactLinks;
+
+        setValue("contact_links", normalizedContactLinks, {
+            shouldDirty: true,
+            shouldTouch: true,
+            shouldValidate: true,
+        });
+    }
+
+    function setPrimaryContact(indexToSetPrimary: number) {
+        const nextContactLinks = safeContactLinks.map((link, index) => ({
+            ...link,
+            is_primary_contact: index === indexToSetPrimary,
+        }));
+
+        setValue("contact_links", nextContactLinks, {
+            shouldDirty: true,
+            shouldTouch: true,
+            shouldValidate: true,
+        });
+    }
+
+    return (
+        <div className="md:col-span-2 xl:col-span-4">
+            <FormCard>
+                <div className="space-y-4">
+                    <div className="flex items-start justify-between gap-4">
+                        <div>
+                            <h4 className="text-sm font-semibold text-slate-800">
+                                Contactos del paciente
+                            </h4>
+
+                            <p className="mt-1 text-xs text-slate-500">
+                                Debes agregar al menos un contacto principal
+                                para registrar el paciente.
+                            </p>
+                        </div>
+
+                        <button
+                            type="button"
+                            onClick={addContactLink}
+                            disabled={centerContactOptions.length === 0}
+                            className="rounded-xl bg-sky-600 px-3 py-2 text-xs font-semibold text-white shadow-sm hover:bg-sky-700 disabled:cursor-not-allowed disabled:bg-slate-400"
+                        >
+                            Agregar contacto
+                        </button>
+                    </div>
+
+                    {contactLinksError && (
+                        <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-700">
+                            {contactLinksError}
+                        </div>
+                    )}
+
+                    {centerContactOptions.length === 0 && (
+                        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                            No hay contactos activos disponibles en este centro.
+                            Registra primero el contacto en el directorio del
+                            centro.
+                        </div>
+                    )}
+
+                    {safeContactLinks.length === 0 ? (
+                        <div className="rounded-xl border border-dashed border-amber-300 bg-amber-50 px-4 py-4 text-sm text-amber-900">
+                            Este paciente todavía no tiene contacto principal.
+                        </div>
+                    ) : (
+                        <div className="space-y-3">
+                            {safeContactLinks.map((contactLink, index) => {
+                                const selectedContact =
+                                    centerContactOptions.find(
+                                        (contact) =>
+                                            String(contact.id) ===
+                                            contactLink.center_contact_id,
+                                    );
+
+                                return (
+                                    <div
+                                        key={index}
+                                        className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
+                                    >
+                                        <div className="mb-4 flex items-start justify-between gap-4">
+                                            <div>
+                                                <p className="text-sm font-semibold text-slate-800">
+                                                    {selectedContact?.display_name ??
+                                                        "Contacto sin seleccionar"}
+                                                </p>
+
+                                                <div className="mt-2 flex flex-wrap gap-2">
+                                                    {contactLink.is_primary_contact && (
+                                                        <span className="inline-flex rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
+                                                            Contacto principal
+                                                        </span>
+                                                    )}
+
+                                                    {selectedContact?.center_contact_type && (
+                                                        <span className="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
+                                                            {
+                                                                selectedContact.center_contact_type
+                                                            }
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            <button
+                                                type="button"
+                                                onClick={() =>
+                                                    removeContactLink(index)
+                                                }
+                                                className="rounded-lg px-2 py-1 text-xs font-semibold text-red-600 hover:bg-red-50"
+                                            >
+                                                Quitar
+                                            </button>
+                                        </div>
+
+                                        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+                                            <DraftContactSelect
+                                                index={index}
+                                                centerContactOptions={
+                                                    centerContactOptions
+                                                }
+                                            />
+
+                                            <DraftContactRoleSelect
+                                                index={index}
+                                            />
+
+                                            <label className="flex min-h-[42px] items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700">
+                                                <input
+                                                    type="radio"
+                                                    checked={
+                                                        contactLink.is_primary_contact
+                                                    }
+                                                    onChange={() =>
+                                                        setPrimaryContact(index)
+                                                    }
+                                                    className="h-4 w-4 border-slate-300 text-sky-600 focus:ring-sky-500"
+                                                />
+                                                Principal
+                                            </label>
+
+                                            <DraftContactCheckbox
+                                                index={index}
+                                                field="is_emergency_contact"
+                                                label="Emergencia"
+                                            />
+
+                                            <DraftContactCheckbox
+                                                index={index}
+                                                field="can_authorize_treatment"
+                                                label="Autoriza tratamiento"
+                                            />
+
+                                            <DraftContactCheckbox
+                                                index={index}
+                                                field="can_pickup_pet"
+                                                label="Autoriza retiro"
+                                            />
+
+                                            <DraftContactCheckbox
+                                                index={index}
+                                                field="can_receive_billing"
+                                                label="Recibe cobranza"
+                                            />
+
+                                            <DraftContactCheckbox
+                                                index={index}
+                                                field="can_receive_medical_updates"
+                                                label="Recibe actualizaciones"
+                                            />
+
+                                            <DraftContactTextInput
+                                                index={index}
+                                                field="specific_relationship"
+                                                label="Relación específica"
+                                                placeholder="Ej: madre, vecino, fundación"
+                                            />
+
+                                            <div className="md:col-span-2 xl:col-span-3">
+                                                <DraftContactTextInput
+                                                    index={index}
+                                                    field="pet_contact_notes"
+                                                    label="Notas del vínculo"
+                                                    placeholder="Ej: prefiere WhatsApp"
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+                </div>
+            </FormCard>
+        </div>
+    );
+}
+
+function DraftContactSelect({
+    index,
+    centerContactOptions,
+}: {
+    index: number;
+    centerContactOptions: NewPetCenterContactOption[];
+}) {
+    const {
+        register,
+        formState: {errors},
+    } = useFormContext<AddNewPetFormValues>();
+
+    const fieldName = `contact_links.${index}.center_contact_id` as const;
+
+    return (
+        <div className="space-y-2">
+            <FieldLabel>Contacto</FieldLabel>
+
+            <select
+                {...register(fieldName)}
+                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+            >
+                <option value="">Seleccione contacto</option>
+
+                {centerContactOptions.map((contact) => (
+                    <option key={contact.id} value={String(contact.id)}>
+                        {contact.display_name}
+                    </option>
+                ))}
+            </select>
+
+            <FieldError
+                message={
+                    errors.contact_links?.[index]?.center_contact_id?.message
+                }
+            />
+        </div>
+    );
+}
+
+function DraftContactRoleSelect({index}: {index: number}) {
+    const {
+        register,
+        formState: {errors},
+    } = useFormContext<AddNewPetFormValues>();
+
+    const fieldName = `contact_links.${index}.role` as const;
+
+    return (
+        <div className="space-y-2">
+            <FieldLabel>Rol</FieldLabel>
+
+            <select
+                {...register(fieldName)}
+                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+            >
+                <option value="OWNER_GUARDIAN">Propietario / Tutor</option>
+                <option value="CAREGIVER">Cuidador</option>
+                <option value="BILLING_RESPONSIBLE">Responsable de pago</option>
+                <option value="REFERRING_VET">Veterinario remitente</option>
+                <option value="RESPONSIBLE_INSTITUTION">
+                    Institución responsable
+                </option>
+                <option value="REFERRING_INSTITUTION">
+                    Institución remitente
+                </option>
+                <option value="BREEDER">Criador / Criadero</option>
+                <option value="SHELTER_OR_FOUNDATION">
+                    Refugio / fundación
+                </option>
+            </select>
+
+            <FieldError
+                message={errors.contact_links?.[index]?.role?.message}
+            />
+        </div>
+    );
+}
+
+function DraftContactCheckbox({
+    index,
+    field,
+    label,
+}: {
+    index: number;
+    field:
+        | "is_emergency_contact"
+        | "can_authorize_treatment"
+        | "can_receive_medical_updates"
+        | "can_receive_billing"
+        | "can_pickup_pet";
+    label: string;
+}) {
+    const {register} = useFormContext<AddNewPetFormValues>();
+
+    const fieldName = `contact_links.${index}.${field}` as const;
+
+    return (
+        <label className="flex min-h-[42px] items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700">
+            <input
+                {...register(fieldName)}
+                type="checkbox"
+                className="h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
+            />
+
+            {label}
+        </label>
+    );
+}
+
+function DraftContactTextInput({
+    index,
+    field,
+    label,
+    placeholder,
+}: {
+    index: number;
+    field: "specific_relationship" | "pet_contact_notes";
+    label: string;
+    placeholder?: string;
+}) {
+    const {register} = useFormContext<AddNewPetFormValues>();
+
+    const fieldName = `contact_links.${index}.${field}` as const;
+
+    return (
+        <div className="space-y-2">
+            <FieldLabel>{label}</FieldLabel>
+
+            <input
+                {...register(fieldName)}
+                type="text"
+                placeholder={placeholder}
+                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+            />
+        </div>
+    );
+}
+
 function Section({title, children}: {title: string; children: ReactNode}) {
     return (
         <section>
@@ -1024,6 +1590,7 @@ export default function AddNewPetDialog({
     open,
     speciesOptions,
     veterinarianOptions,
+    centerContactOptions,
     saving = false,
     onClose,
     onSave,
@@ -1146,7 +1713,7 @@ export default function AddNewPetDialog({
                             <FormCard>
                                 <TextInputSection
                                     name="visual_tag"
-                                    label="Inscripción en Placa, collar, etiqueta"
+                                    label="Inscripción en placa, collar, etiqueta"
                                     placeholder="Ej: Toby"
                                     maxLength={20}
                                 />
@@ -1210,6 +1777,12 @@ export default function AddNewPetDialog({
                                     />
                                 </FormCard>
                             </div>
+                        </Section>
+
+                        <Section title="Responsables y contactos">
+                            <NewPetContactLinksDraftPanel
+                                centerContactOptions={centerContactOptions}
+                            />
                         </Section>
 
                         <Section title="Atención veterinaria">

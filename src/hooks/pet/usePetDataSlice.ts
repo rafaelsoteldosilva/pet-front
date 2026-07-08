@@ -17,11 +17,13 @@ import {PetDataInterface} from "@/features/pet/types/petTypes";
 export function usePetDataSlice() {
     const dispatch = useDispatch<reduxDispatch>();
 
-    const pet = useSelector((state: reduxState) => state.petData.pet);
-    const petLoading = useSelector(
+    const petData = useSelector((state: reduxState) => state.petData.pet);
+    const petDataLoading = useSelector(
         (state: reduxState) => state.petData.loading,
     );
-    const petError = useSelector((state: reduxState) => state.petData.error);
+    const petDataError = useSelector(
+        (state: reduxState) => state.petData.error,
+    );
 
     const loadPetDataSlice = async (
         petId: number,
@@ -52,9 +54,9 @@ export function usePetDataSlice() {
     };
 
     return {
-        pet,
-        petLoading,
-        petError,
+        petData,
+        petDataLoading,
+        petDataError,
         loadPetDataSlice,
         clearPetDataSlice,
         updatePetFieldsSlice,

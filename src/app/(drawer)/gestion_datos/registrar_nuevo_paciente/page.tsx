@@ -9,19 +9,82 @@ import {createPetApi} from "@/api/pet/createPetApi";
 
 import AddNewPetDialog, {
     type AddNewPetPayload,
+    type NewPetCenterContactOption,
     type NewPetSpeciesOption,
+    type NewPetVeterinarianOption,
 } from "@/features/pet/dialogs/addNewPetDialog";
 
 import {useAllowedSpeciesAndBreedsSlice} from "@/hooks/pet/useAllowedSpeciesAndBreedsSlice";
 import {useCenterVetsSlice} from "@/hooks/center/useCenterVetsSlice";
+import {useCenterContactsSlice} from "@/hooks/center/useCenterContactsSlice";
 import {usePetDataSlice} from "@/hooks/pet/usePetDataSlice";
 
 import {getActiveCenterId} from "@/shared/auth/authStorage";
 
-type VeterinarianOptionForAddPetDialog = {
-    id: number;
-    full_name: string;
-};
+import type {CenterContactInterface} from "@/features/center/centerContact/types/centerContactTypes";
+
+/* ======================================================
+   HELPERS
+   ====================================================== */
+
+type UnknownRecord = Record<string, unknown>;
+
+function isRecord(value: unknown): value is UnknownRecord {
+    return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function getRecordValue(source: unknown, key: string): unknown {
+    if (!isRecord(source)) {
+        return undefined;
+    }
+
+    return source[key];
+}
+
+function getStringValue(source: unknown, key: string): string {
+    const value = getRecordValue(source, key);
+
+    if (typeof value === "string") {
+        return value.trim();
+    }
+
+    if (typeof value === "number") {
+        return String(value);
+    }
+
+    return "";
+}
+
+function getNumberValue(source: unknown, key: string): number | null {
+    const value = getRecordValue(source, key);
+
+    if (typeof value === "number" && Number.isFinite(value)) {
+        return value;
+    }
+
+    if (typeof value === "string") {
+        const parsedValue = Number(value);
+        return Number.isFinite(parsedValue) ? parsedValue : null;
+    }
+
+    return null;
+}
+
+function getBooleanValue(source: unknown, key: string): boolean {
+    return getRecordValue(source, key) === true;
+}
+
+function getFirstStringValue(source: unknown, keys: readonly string[]): string {
+    for (const key of keys) {
+        const value = getStringValue(source, key);
+
+        if (value) {
+            return value;
+        }
+    }
+
+    return "";
+}
 
 function getErrorMessage(error: unknown): string {
     if (error instanceof Error) {
@@ -30,6 +93,117 @@ function getErrorMessage(error: unknown): string {
 
     return "No se pudo registrar el paciente.";
 }
+
+function getCenterContactId(contact: CenterContactInterface): number | null {
+    const id = getNumberValue(contact, "id");
+
+    if (id !== null) {
+        return id;
+    }
+
+    return getNumberValue(contact, "center_contact_id");
+}
+
+function getCenterContactType(contact: CenterContactInterface): string | null {
+    const contactType = getFirstStringValue(contact, [
+        "center_contact_type",
+        "contact_type",
+        "type",
+    ]);
+
+    return contactType || null;
+}
+
+function getCenterContactDisplayName(contact: CenterContactInterface): string {
+    const directName = getFirstStringValue(contact, [
+        "display_name",
+        "name",
+        "full_name",
+        "contact_name",
+    ]);
+
+    if (directName) {
+        return directName;
+    }
+
+    const contactType = getCenterContactType(contact)?.toUpperCase();
+
+    if (contactType === "INSTITUTION") {
+        const institutionName = getFirstStringValue(contact, [
+            "institution_name",
+            "institution",
+            "legal_name",
+            "business_name",
+        ]);
+
+        return institutionName || "Contacto sin nombre";
+    }
+
+    const firstName = getFirstStringValue(contact, [
+        "first_name",
+        "names",
+        "given_name",
+    ]);
+
+    const lastName = getFirstStringValue(contact, [
+        "last_name",
+        "family_name",
+        "paternal_last_name",
+    ]);
+
+    const fullName = [firstName, lastName].filter(Boolean).join(" ").trim();
+
+    return fullName || "Contacto sin nombre";
+}
+
+function getCenterContactDocumentId(
+    contact: CenterContactInterface,
+): string | null {
+    const documentId = getFirstStringValue(contact, [
+        "document_id",
+        "contact_document_id",
+        "national_dni",
+        "rut",
+        "dni",
+    ]);
+
+    return documentId || null;
+}
+
+function getCenterContactEmail(contact: CenterContactInterface): string | null {
+    const email = getFirstStringValue(contact, [
+        "email",
+        "primary_email",
+        "contact_email",
+    ]);
+
+    return email || null;
+}
+
+function getCenterContactPhone(contact: CenterContactInterface): string | null {
+    const phone = getFirstStringValue(contact, [
+        "cell_phone",
+        "primary_phone",
+        "mobile_phone",
+        "mobile",
+        "phone",
+        "secondary_phone",
+    ]);
+
+    return phone || null;
+}
+
+function isCenterContactActive(contact: CenterContactInterface): boolean {
+    if (!isRecord(contact) || !("is_active" in contact)) {
+        return true;
+    }
+
+    return getBooleanValue(contact, "is_active");
+}
+
+/* ======================================================
+   COMPONENT
+   ====================================================== */
 
 export default function RegistrarNuevoPacientePage() {
     const router = useRouter();
@@ -59,6 +233,14 @@ export default function RegistrarNuevoPacientePage() {
         loadCenterVetsSlice,
     } = useCenterVetsSlice({centerId});
 
+    const {
+        centerContacts,
+        centerContactsLoading,
+        centerContactsError,
+        loadedCenterId: loadedCenterContactsCenterId,
+        loadCenterContactsSlice,
+    } = useCenterContactsSlice({centerId});
+
     useEffect(() => {
         const activeCenterId = getActiveCenterId();
 
@@ -81,8 +263,15 @@ export default function RegistrarNuevoPacientePage() {
         if (centerId === null) return;
         if (loadedCenterVetsCenterId === centerId) return;
 
-        loadCenterVetsSlice();
+        void loadCenterVetsSlice();
     }, [centerId, loadedCenterVetsCenterId, loadCenterVetsSlice]);
+
+    useEffect(() => {
+        if (centerId === null) return;
+        if (loadedCenterContactsCenterId === centerId) return;
+
+        void loadCenterContactsSlice();
+    }, [centerId, loadedCenterContactsCenterId, loadCenterContactsSlice]);
 
     const speciesOptions = useMemo<NewPetSpeciesOption[]>(() => {
         return speciesAndBreedsResults.map((item) => ({
@@ -92,19 +281,51 @@ export default function RegistrarNuevoPacientePage() {
         }));
     }, [speciesAndBreedsResults]);
 
-    const veterinarianOptions = useMemo<
-        VeterinarianOptionForAddPetDialog[]
-    >(() => {
+    const veterinarianOptions = useMemo<NewPetVeterinarianOption[]>(() => {
         return centerVets.map((vet) => ({
             id: vet.id,
-            full_name: vet.display_name,
+            full_name: vet.display_name?.trim() || "Veterinario sin nombre",
         }));
     }, [centerVets]);
 
-    const loadingInitialData =
-        !centerIdResolved || speciesAndBreedsLoading || centerVetsLoading;
+    const centerContactOptions = useMemo<NewPetCenterContactOption[]>(() => {
+        const options: NewPetCenterContactOption[] = [];
 
-    const dataError = pageError ?? speciesAndBreedsError ?? centerVetsError;
+        for (const contact of centerContacts) {
+            if (!isCenterContactActive(contact)) {
+                continue;
+            }
+
+            const id = getCenterContactId(contact);
+
+            if (id === null) {
+                continue;
+            }
+
+            options.push({
+                id,
+                display_name: getCenterContactDisplayName(contact),
+                center_contact_type: getCenterContactType(contact),
+                document_id: getCenterContactDocumentId(contact),
+                email: getCenterContactEmail(contact),
+                phone: getCenterContactPhone(contact),
+            });
+        }
+
+        return options;
+    }, [centerContacts]);
+
+    const loadingInitialData =
+        !centerIdResolved ||
+        speciesAndBreedsLoading ||
+        centerVetsLoading ||
+        centerContactsLoading;
+
+    const dataError =
+        pageError ??
+        speciesAndBreedsError ??
+        centerVetsError ??
+        centerContactsError;
 
     async function handleSave(payload: AddNewPetPayload) {
         setPageError(null);
@@ -123,7 +344,6 @@ export default function RegistrarNuevoPacientePage() {
             });
 
             setPetDataSlice(createdPet);
-
             setDialogOpen(false);
 
             router.push("/paciente/datos_paciente");
@@ -174,6 +394,7 @@ export default function RegistrarNuevoPacientePage() {
                 open={dialogOpen}
                 speciesOptions={speciesOptions}
                 veterinarianOptions={veterinarianOptions}
+                centerContactOptions={centerContactOptions}
                 saving={saving}
                 onClose={() => setDialogOpen(false)}
                 onSave={handleSave}

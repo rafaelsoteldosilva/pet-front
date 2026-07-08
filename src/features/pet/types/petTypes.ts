@@ -170,6 +170,8 @@ export interface PetDataInterface {
     treatment_authorization_contacts: PetContactLinkInterface[];
     medical_update_contacts: PetContactLinkInterface[];
     billing_update_contacts: PetContactLinkInterface[];
+    can_delete_draft_pet: boolean;
+    delete_draft_pet_block_reason: string | null;
 }
 
 export const GET_ALL_PETS_FOR_CENTER_SEARCH_TYPE = {

@@ -5,7 +5,7 @@ import axiosInstance from "@/api/axiosInstance";
 import type {PetDataInterface} from "@/features/pet/types/petTypes";
 import type {AddNewPetPayload} from "@/features/pet/dialogs/addNewPetDialog";
 
-type CreatePetApiArgs = {
+type CreatePetApiParams = {
     centerId: number;
     payload: AddNewPetPayload;
 };
@@ -13,8 +13,7 @@ type CreatePetApiArgs = {
 export async function createPetApi({
     centerId,
     payload,
-}: CreatePetApiArgs): Promise<PetDataInterface> {
-    console.log("createPet:: payload = ", payload);
+}: CreatePetApiParams): Promise<PetDataInterface> {
     const response = await axiosInstance.post<PetDataInterface>(
         `/pet/${centerId}/create/`,
         payload,

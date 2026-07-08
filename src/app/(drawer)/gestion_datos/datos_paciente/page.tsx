@@ -19,11 +19,11 @@ import {
 
 import PetDataView from "@/features/pet/components/petDataView";
 
-export default function Patient_Management_BasicDataOfAPatient() {
+export default function Pet_Management_DataOfAPatient() {
     const {setMenuWithMenuId} = useSidebarContext();
     const centerId = 1;
 
-    const {pet, petLoading, loadPetDataSlice} = usePetDataSlice();
+    const {petData, petDataLoading, loadPetDataSlice} = usePetDataSlice();
 
     const [openSelector, setOpenSelector] = useState(false);
     const [openConfirmUsePet, setOpenConfirmUsePet] = useState(false);
@@ -37,17 +37,17 @@ export default function Patient_Management_BasicDataOfAPatient() {
     }, [setMenuWithMenuId]);
 
     useEffect(() => {
-        if (petLoading) return;
+        if (petDataLoading) return;
         if (hasHandledInitialEntry.current) return;
 
         hasHandledInitialEntry.current = true;
 
-        if (pet) {
+        if (petData) {
             setOpenConfirmUsePet(true);
         } else {
             setOpenSelector(true);
         }
-    }, [petLoading, pet]);
+    }, [petDataLoading, petData]);
 
     const handlePetSelected = async (
         selectedPet: GetAllPetsForCenterResult,
@@ -100,17 +100,17 @@ export default function Patient_Management_BasicDataOfAPatient() {
     };
 
     const handleSubmitEdit = async (data: UpdatePetDataPayload) => {
-        if (!pet?.veterinary_center) {
+        if (!petData?.veterinary_center) {
             throw new Error("No hay centro veterinario asociado al paciente.");
         }
 
         await updatePetDataApi({
-            centerId: pet.veterinary_center.id,
-            petId: pet.id,
+            centerId: petData.veterinary_center.id,
+            petId: petData.id,
             data,
         });
 
-        await loadPetDataSlice(pet.id, pet.veterinary_center.id);
+        await loadPetDataSlice(petData.id, petData.veterinary_center.id);
 
         setOpenEdit(false);
     };
@@ -124,20 +124,20 @@ export default function Patient_Management_BasicDataOfAPatient() {
                     <span>
                         ¿Quieres seguir usando a{" "}
                         <strong className="font-semibold text-slate-900">
-                            {pet?.name ?? "este paciente"}
+                            {petData?.name ?? "este paciente"}
                         </strong>
-                        {pet?.breed?.name ? (
+                        {petData?.breed?.name ? (
                             <>
                                 ,{" "}
                                 <strong className="font-semibold text-slate-900">
-                                    {pet.breed.name}
+                                    {petData.breed.name}
                                 </strong>
                             </>
                         ) : null}
                         ?
                     </span>
                 }
-                photoUrl={pet?.photo_url}
+                photoUrl={petData?.photo_url}
                 variant="info"
                 acceptLabel="Sí"
                 cancelLabel="No"
@@ -167,7 +167,7 @@ export default function Patient_Management_BasicDataOfAPatient() {
             </ModalDialog>
 
             <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-                {pet ? (
+                {petData ? (
                     <div>
                         <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
                             <h2 className="text-lg font-semibold text-slate-800">

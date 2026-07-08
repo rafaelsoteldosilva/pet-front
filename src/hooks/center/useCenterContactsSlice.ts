@@ -13,7 +13,7 @@ import {
 } from "@/state/redux/slices/centerContactsSlice";
 
 type Params = {
-    centerId: number;
+    centerId: number | null;
 };
 
 type LoadOptions = {
@@ -49,6 +49,10 @@ export function useCenterContactsSlice({centerId}: Params) {
 
     const loadCenterContactsSlice = useCallback(
         ({forceRefresh = false}: LoadOptions = {}) => {
+            if (centerId === null) {
+                return;
+            }
+
             const alreadyLoadedForCenter = loadedCenterId === centerId;
 
             if (!forceRefresh && alreadyLoadedForCenter) {

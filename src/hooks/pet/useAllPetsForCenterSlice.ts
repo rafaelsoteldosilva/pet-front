@@ -10,13 +10,14 @@ import type {reduxDispatch, reduxState} from "@/state/redux/store";
 import {
     fetchAllPetsForCenter,
     clearAllPetsForCenterResults,
+    removePetFromAllPetsForCenterResults,
 } from "@/state/redux/slices/allPetsForCenterSlice";
 
 import type {GetAllPetsForCenterTypeValue} from "@/features/pet/types/petTypes";
 
 type Params = {
     centerId: number;
-    mode: GetAllPetsForCenterTypeValue;
+    mode?: GetAllPetsForCenterTypeValue;
     minLength?: number;
 };
 
@@ -32,15 +33,15 @@ export function useAllPetsForCenterSlice({
     // Redux selectors
     // --------------------
 
-    const results = useSelector(
+    const allPetsForCenterResults = useSelector(
         (state: reduxState) => state.allPetsForCenter.results,
     );
 
-    const loading = useSelector(
+    const allPetsForCenterLoading = useSelector(
         (state: reduxState) => state.allPetsForCenter.loading,
     );
 
-    const error = useSelector(
+    const allPetsForCenterError = useSelector(
         (state: reduxState) => state.allPetsForCenter.error,
     );
 
@@ -48,14 +49,22 @@ export function useAllPetsForCenterSlice({
     // Local input state
     // --------------------
 
-    const [value, setValue] = useState("");
+    const [allPetsForCenterPetSearchText, allPetsForCenterSetPetSearchText] =
+        useState("");
 
     // --------------------
     // Actions
     // --------------------
 
     const loadSearchPetsSlice = () => {
-        const query = value.trim();
+        if (!mode) {
+            console.warn(
+                "useAllPetsForCenterSlice:: mode is required to search pets.",
+            );
+            return;
+        }
+
+        const query = allPetsForCenterPetSearchText.trim();
 
         if (query.length < minLength) {
             return;
@@ -80,8 +89,12 @@ export function useAllPetsForCenterSlice({
 
     const clearSearchPetsSlice = () => {
         lastKeyRef.current = null;
-        setValue("");
+        allPetsForCenterSetPetSearchText("");
         dispatch(clearAllPetsForCenterResults());
+    };
+
+    const removePetFromAllPetsForCenterSlice = (petId: number) => {
+        dispatch(removePetFromAllPetsForCenterResults(petId));
     };
 
     // --------------------
@@ -90,16 +103,17 @@ export function useAllPetsForCenterSlice({
 
     return {
         // input
-        value,
-        setValue,
+        allPetsForCenterPetSearchText,
+        allPetsForCenterSetPetSearchText,
 
         // data
-        results,
-        loading,
-        error,
+        allPetsForCenterResults,
+        allPetsForCenterLoading,
+        allPetsForCenterError,
 
         // actions
         loadSearchPetsSlice,
         clearSearchPetsSlice,
+        removePetFromAllPetsForCenterSlice,
     };
 }
