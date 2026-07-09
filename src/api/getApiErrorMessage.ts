@@ -1,10 +1,6 @@
-// src/api/reading/catalog/getAllowedSpeciesAndBreedsApi.ts
+// src/api/getApiErrorMessage.ts
 
 import axios from "axios";
-
-import axiosInstance from "../axiosInstance";
-import {getAxiosErrorMessage} from "../shared/getAxiosErrorMessage";
-import {AllowedSpeciesAndBreedsResult} from "@/features/pet/types/petTypes";
 
 type ApiErrorResponse = {
     detail?: unknown;
@@ -12,9 +8,10 @@ type ApiErrorResponse = {
     [key: string]: unknown;
 };
 
-function getAllowedSpeciesAndBreedsErrorMessage(error: unknown): string {
-    const fallbackMessage = "No se pudieron cargar las especies y razas.";
-
+export function getApiErrorMessage(
+    error: unknown,
+    fallbackMessage: string,
+): string {
     if (axios.isAxiosError<ApiErrorResponse>(error)) {
         const responseData = error.response?.data;
 
@@ -41,20 +38,9 @@ function getAllowedSpeciesAndBreedsErrorMessage(error: unknown): string {
         }
     }
 
-    return getAxiosErrorMessage(error) || fallbackMessage;
-}
-
-export async function getAllowedSpeciesAndBreedsApi(
-    centerId: number,
-): Promise<AllowedSpeciesAndBreedsResult> {
-    try {
-        const url = `/all-catalog/species-breeds/${centerId}/`;
-
-        const response =
-            await axiosInstance.get<AllowedSpeciesAndBreedsResult>(url);
-
-        return response.data;
-    } catch (error) {
-        throw new Error(getAllowedSpeciesAndBreedsErrorMessage(error));
+    if (error instanceof Error && error.message) {
+        return error.message;
     }
+
+    return fallbackMessage;
 }

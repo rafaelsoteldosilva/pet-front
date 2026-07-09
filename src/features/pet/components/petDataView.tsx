@@ -19,7 +19,7 @@ import {canEditPetDataByDraftStatusOnly} from "@/features/pet/rules/canEditPetDa
 import GlobalButton from "@/shared/ui/globalButton";
 
 import {deletePetContactLinkApi} from "@/api/pet/contactLinks/deletePetContactLinkApi";
-import {deleteDraftPetApi} from "@/api/pet/deleteDraftPetApi";
+import {deletePetApi} from "@/api/pet/deletePetApi";
 import {getAxiosErrorMessage} from "@/api/shared/getAxiosErrorMessage";
 
 import EditPetSpeciesAndBreedDialog from "../dialogs/editPetSpeciesAndBreedDialog";
@@ -289,13 +289,13 @@ function validateBirthDate(value: string): string | null {
 type Props = {
     enableEdition?: boolean;
     onEditWholePet?: () => void;
-    onDeletedDraftPet?: () => void;
+    onDeletedPet?: () => void;
 };
 
 export default function PetDataView({
     enableEdition = false,
     onEditWholePet,
-    onDeletedDraftPet,
+    onDeletedPet,
 }: Props) {
     const router = useRouter();
     const centerId = 1;
@@ -357,15 +357,13 @@ export default function PetDataView({
         null,
     );
 
-    const [deleteDraftPetError, setDeleteDraftPetError] = useState<
-        string | null
-    >(null);
+    const [deletePetError, setDeletePetError] = useState<string | null>(null);
 
     const [deletingPetContactId, setDeletingPetContactId] = useState<
         number | null
     >(null);
 
-    const [deletingDraftPet, setDeletingDraftPet] = useState(false);
+    const [deletingPet, setDeletingPet] = useState(false);
 
     if (petDataLoading) {
         return <div className="text-slate-500">Cargando paciente…</div>;
@@ -404,7 +402,7 @@ export default function PetDataView({
         canEditPetDataByDraftStatusOnly(clinicalRecordStatus) &&
         enableEdition;
 
-    const canDeleteDraftPet = canEditPetData;
+    const canDeletePet = enableEdition;
 
     const status = formatStatus(petData.status);
 
@@ -476,24 +474,24 @@ export default function PetDataView({
         }
     }
 
-    async function handleDeletePetDraft() {
-        if (!canDeleteDraftPet || deletingDraftPet) {
+    async function handleDeletePet() {
+        if (!canDeletePet || deletingPet) {
             return;
         }
 
         const confirmed = window.confirm(
-            "¿Eliminar este paciente en borrador? Esta acción no se puede deshacer.",
+            "¿Eliminar este paciente? Esta acción no se puede deshacer.",
         );
 
         if (!confirmed) {
             return;
         }
 
-        setDeleteDraftPetError(null);
-        setDeletingDraftPet(true);
+        setDeletePetError(null);
+        setDeletingPet(true);
 
         try {
-            await deleteDraftPetApi({
+            await deletePetApi({
                 centerId,
                 petId,
             });
@@ -501,18 +499,18 @@ export default function PetDataView({
             removePetFromAllPetsForCenterSlice(petId);
             clearPetDataSlice();
 
-            if (typeof onDeletedDraftPet === "function") {
-                onDeletedDraftPet();
+            if (typeof onDeletedPet === "function") {
+                onDeletedPet();
             } else {
                 router.back();
             }
 
             router.refresh();
         } catch (error) {
-            console.error("PetDataView::handleDeletePetDraft error:", error);
-            setDeleteDraftPetError(getAxiosErrorMessage(error));
+            console.error("PetDataView::handleDeletePet error:", error);
+            setDeletePetError(getAxiosErrorMessage(error));
         } finally {
-            setDeletingDraftPet(false);
+            setDeletingPet(false);
         }
     }
 
@@ -660,7 +658,7 @@ export default function PetDataView({
                         </span>
                     </div>
 
-                    {showWholePetEditButton && (
+                    {/* {showWholePetEditButton && (
                         <GlobalButton
                             variant="ghost"
                             onClick={onEditWholePet}
@@ -668,7 +666,7 @@ export default function PetDataView({
                         >
                             Editar ficha completa
                         </GlobalButton>
-                    )}
+                    )} */}
                 </div>
             </div>
 
@@ -902,39 +900,41 @@ export default function PetDataView({
                 </Section>
             </div>
 
-            {canDeleteDraftPet && (
-                <div className="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 shadow-sm">
+            {canDeletePet && (
+                <div className="mt-6 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
                     <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                         <div>
-                            <h3 className="text-sm font-semibold text-red-800">
-                                Eliminar paciente en borrador
+                            <h3 className="text-sm font-semibold text-slate-900">
+                                Eliminar paciente
                             </h3>
 
-                            <p className="mt-1 text-sm text-red-700">
-                                Esta acción elimina el paciente mientras todavía
-                                está en borrador. Si el paciente tiene historia
-                                clínica activa no podrá eliminarlo.
+                            <p className="mt-1 text-sm text-slate-600">
+                                Esta acción intentará eliminar el paciente. Si
+                                el paciente tiene información clínica asociada,
+                                el sistema no permitirá eliminarlo.
                             </p>
 
-                            {deleteDraftPetError && (
-                                <p className="mt-2 text-sm font-medium text-red-700">
-                                    {deleteDraftPetError}
-                                </p>
+                            {deletePetError && (
+                                <div
+                                    role="alert"
+                                    className="mt-3 rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm font-medium text-red-700"
+                                >
+                                    {deletePetError}
+                                </div>
                             )}
                         </div>
 
                         <GlobalButton
                             variant="ghost"
-                            onClick={handleDeletePetDraft}
-                            disabled={deletingDraftPet}
+                            onClick={handleDeletePet}
+                            disabled={deletingPet}
                             className={clsx(
                                 "shrink-0 border border-red-300 bg-white text-red-700",
-                                "hover:border-red-400 hover:bg-red-100",
-                                deletingDraftPet &&
-                                    "cursor-not-allowed opacity-60",
+                                "hover:border-red-400 hover:bg-red-50",
+                                deletingPet && "cursor-not-allowed opacity-60",
                             )}
                         >
-                            {deletingDraftPet
+                            {deletingPet
                                 ? "Eliminando..."
                                 : "Eliminar paciente"}
                         </GlobalButton>

@@ -419,7 +419,7 @@ export default function EditPetLastAttendingVeterinarianDialog({
                                         disabled={isSaving}
                                         required
                                         fullWidth
-                                        helperText="Escribe el nombre del veterinario externo que trató a la mascota."
+                                        helperText="Escribe el nombre del veterinario externo que trató a la mascota. Incluye el centro veterinario por favor"
                                         onChange={(event) => {
                                             setExternalVeterinarianName(
                                                 event.target.value,
